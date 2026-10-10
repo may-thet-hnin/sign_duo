@@ -1,111 +1,105 @@
+/* ───────────── Sign Duo · tokens, base, scenery ─────────────
+   Smoked liquid glass floating over a 16-bit dusk sky.        */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* Palette */
+  --ink: #130b3a;          /* outlines, hard shadows */
+  --indigo: #241a63;       /* sky top */
+  --rose: #ff7ba9;         /* sky mid */
+  --coral: #ff9a8a;        /* horizon */
+  --gold: #ffd23f;         /* primary action, score */
+  --gold-deep: #8a4b00;
+  --aqua: #5ff3ff;         /* player 1, focus */
+  --pink: #ff6fb5;         /* player 2 */
+  --mint: #6dffb4;         /* correct / progress */
+  --danger: #ff6b82;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --text: #ffffff;
+  --text-soft: rgba(255, 255, 255, 0.82);
+  --smoke: rgba(22, 12, 66, 0.55);
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  --display: 'Press Start 2P', ui-monospace, 'Courier New', monospace;
+  --body: 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
+
+  --r-lg: 28px;
+  --r-md: 18px;
+  --r-sm: 12px;
+
+  font: 400 19px/1.45 var(--body);
   color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
+  color-scheme: dark;
   text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+@media (max-width: 720px) {
+  :root { font-size: 17px; }
 }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { background: var(--indigo); }
 
 body {
   margin: 0;
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  color: var(--text);
+  background: linear-gradient(180deg, #1b1250 0%, #3a2287 26%, #a8449c 52%, var(--rose) 72%, var(--coral) 100%) fixed;
+  overflow-x: hidden;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+#root { position: relative; min-height: 100svh; }
+
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; line-height: 1.25; }
+button, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+:focus-visible {
+  outline: 3px solid var(--aqua);
+  outline-offset: 3px;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+::selection { background: var(--gold); color: var(--ink); }
+
+.sd-sprite { display: block; image-rendering: pixelated; flex: none; }
+
+/* ───────────── Scenery ───────────── */
+
+.sd-scenery { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+
+.sd-blob { position: absolute; border-radius: 50%; filter: blur(46px); opacity: 0.6; animation: sd-float 22s ease-in-out infinite alternate; }
+.sd-blob--aqua { width: 38vmax; height: 38vmax; left: -10vmax; top: 18vh; background: radial-gradient(circle, #31d9ff, transparent 68%); }
+.sd-blob--pink { width: 44vmax; height: 44vmax; right: -14vmax; top: 4vh; background: radial-gradient(circle, #ff4fa6, transparent 68%); animation-duration: 28s; animation-delay: -9s; }
+.sd-blob--gold { width: 34vmax; height: 34vmax; left: 30vw; bottom: 6vh; background: radial-gradient(circle, #ffc23a, transparent 66%); animation-duration: 34s; animation-delay: -17s; }
+
+@keyframes sd-float {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(6vw, -5vh, 0) scale(1.15); }
+}
+
+.sd-star { position: absolute; background: #fff; opacity: 0.85; }
+.sd-star--twinkle { animation: sd-twinkle 3.2s steps(2) infinite; }
+@keyframes sd-twinkle { 50% { opacity: 0.15; } }
+
+.sd-cloud { position: absolute; left: 0; opacity: 0.5; animation: sd-drift var(--dur) steps(120) infinite; animation-delay: var(--delay); }
+.sd-cloud .sd-sprite { width: 100%; height: auto; }
+@keyframes sd-drift {
+  from { transform: translateX(-340px); }
+  to   { transform: translateX(100vw); }
+}
+
+.sd-hills { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 34vh; min-height: 160px; }
+
+.sd-scan {
+  position: fixed; inset: 0; z-index: 90; pointer-events: none; opacity: 0.55;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(19, 11, 58, 0.14) 2px 3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  .sd-cloud { animation: none; transform: translateX(12vw); }
 }

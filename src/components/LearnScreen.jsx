@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import PixelSprite from "./Pixel.jsx";
 
 /* ---------- Lesson content: edit or extend freely ---------- */
 // Put sign images in your public folder (e.g. /public/signs/a.png) and set `image`.
@@ -46,70 +47,19 @@ const MAX_LIVES = 3;
 const POINTS_QUIZ = 10;
 const POINTS_PRACTICE = 5;
 
-const css = `
-.hl { --bg:#fff; --fg:#1a1a1a; --muted:#6b6b66; --line:#e4e2db; --soft:#f6f5f1;
-  --accent:#2f6fed; --accent-fg:#fff; --good:#1f8a4c; --bad:#d9363e;
-  max-width:460px; margin:0 auto; padding:16px; color:var(--fg);
-  font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
-@media (prefers-color-scheme: dark) {
-  .hl { --bg:#1f1f1d; --fg:#f2f1ec; --muted:#a3a29a; --line:#37362f; --soft:#2a2a27;
-    --accent:#6f9bff; --accent-fg:#101010; --good:#4fc47f; --bad:#ff6b73; }
-}
-.hl * { box-sizing:border-box; }
-.hl__top { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-.hl__track { flex:1; height:8px; background:var(--soft); border-radius:4px; overflow:hidden; }
-.hl__fill { height:100%; background:var(--accent); border-radius:4px; transition:width .4s ease; }
-.hl__hearts { display:flex; gap:3px; color:var(--bad); }
-.hl__heart { width:20px; height:20px; transition:opacity .2s; }
-.hl__heart[data-lost="true"] { opacity:.25; }
-.hl__score { font-size:14px; font-weight:500; min-width:52px; text-align:right; font-variant-numeric:tabular-nums; }
-.hl__card { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:20px; }
-.hl__tag { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin:0 0 8px; }
-.hl__h { margin:0 0 4px; font-size:22px; font-weight:500; }
-.hl__sub { margin:0 0 16px; color:var(--muted); font-size:14px; }
-.hl__img { aspect-ratio:4/3; width:100%; border-radius:10px; background:var(--soft);
-  display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:16px; }
-.hl__img img { width:100%; height:100%; object-fit:contain; }
-.hl__big { font-size:72px; font-weight:500; color:var(--muted); }
-.hl__steps { margin:0 0 20px; padding-left:20px; line-height:1.6; font-size:15px; }
-.hl__btn { width:100%; font:inherit; font-size:16px; font-weight:500; padding:12px; cursor:pointer;
-  color:var(--accent-fg); background:var(--accent); border:none; border-radius:10px; }
-.hl__btn:disabled { opacity:.45; cursor:default; }
-.hl__btn--ghost { color:var(--fg); background:transparent; border:1px solid var(--line); margin-top:8px; }
-.hl__opts { display:grid; gap:8px; margin-bottom:16px; }
-.hl__opt { font:inherit; font-size:15px; text-align:left; padding:12px 14px; cursor:pointer;
-  color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:10px; }
-.hl__opt:hover:not(:disabled) { border-color:var(--muted); }
-.hl__opt[data-state="right"] { border:2px solid var(--good); }
-.hl__opt[data-state="wrong"] { border:2px solid var(--bad); }
-.hl__msg { min-height:22px; margin:0 0 12px; font-size:14px; font-weight:500; }
-.hl__msg[data-ok="true"] { color:var(--good); }
-.hl__msg[data-ok="false"] { color:var(--bad); }
-.hl__cam { position:relative; aspect-ratio:4/3; border-radius:10px; overflow:hidden; background:var(--soft); margin-bottom:12px; }
-.hl__video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); display:block; }
-.hl__camtxt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  padding:16px; text-align:center; color:var(--muted); font-size:14px; }
-.hl__ref { display:flex; gap:12px; align-items:center; margin-bottom:12px; font-size:14px; }
-.hl__ref b { font-size:28px; font-weight:500; }
-@media (prefers-reduced-motion: reduce) { .hl__fill, .hl__heart { transition:none; } }
-`;
-
 function Heart({ lost }) {
-  return (
-    <svg className="hl__heart" data-lost={lost} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 21s-7.5-4.6-9.6-9.1C1.1 8.9 2.7 5.5 6 5.1c2-.2 3.7.8 4.6 2.2l1.4 1.9 1.4-1.9c.9-1.4 2.6-2.4 4.6-2.2 3.3.4 4.9 3.8 3.6 6.8C19.5 16.4 12 21 12 21z"
-        fill="currentColor"
-      />
-    </svg>
-  );
+  return <span className="hl__heart" data-lost={lost}><PixelSprite name="heart" scale={4} /></span>;
 }
+
+const SPRITE_LETTERS = ["A", "B", "C", "L", "V", "Y"];
 
 function SignImage({ lesson }) {
   return (
     <div className="hl__img">
       {lesson.image ? (
         <img src={lesson.image} alt={`Handshape for the letter ${lesson.letter}`} />
+      ) : SPRITE_LETTERS.includes(lesson.letter) ? (
+        <PixelSprite name={lesson.letter} scale={16} label={`Handshape for the letter ${lesson.letter}`} />
       ) : (
         <span className="hl__big" aria-hidden="true">{lesson.letter}</span>
       )}
@@ -202,20 +152,18 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
 
   return (
     <section className="hl" aria-label="Handshape lessons">
-      <style>{css}</style>
-
-      <header className="hl__top">
+      <header className="hl__top glass">
         <div className="hl__hearts" role="img" aria-label={`${lives} of ${MAX_LIVES} lives left`}>
           {Array.from({ length: MAX_LIVES }, (_, i) => <Heart key={i} lost={i >= lives} />)}
         </div>
-        <div className="hl__track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-          <div className="hl__fill" style={{ width: `${pct}%` }} />
+        <div className="hl__track sd-bar" role="progressbar" aria-label="Lesson progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+          <div className="sd-bar__fill" style={{ "--pct": `${pct}%` }} />
         </div>
-        <div className="hl__score">{score} pts</div>
+        <div className="hl__score">{score}<small> pts</small></div>
       </header>
 
       {phase === "learn" && (
-        <div className="hl__card">
+        <div className="hl__card glass">
           <p className="hl__tag">Lesson {idx + 1} of {lessons.length}</p>
           <h2 className="hl__h">Letter {lesson.letter}</h2>
           <p className="hl__sub">{lesson.name}</p>
@@ -228,7 +176,7 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
       )}
 
       {phase === "quiz" && (
-        <div className="hl__card">
+        <div className="hl__card glass">
           <p className="hl__tag">Quick check</p>
           <h2 className="hl__h">Which letter is this?</h2>
           <p className="hl__sub">{lesson.clue}</p>
@@ -241,7 +189,7 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
               }
               return (
                 <button key={o.id} className="hl__opt" data-state={state} disabled={!!picked} onClick={() => pick(o)}>
-                  {o.letter}: {o.name}
+                  <span className="hl__key">{o.letter}</span><span>{o.name}</span>
                 </button>
               );
             })}
@@ -254,11 +202,11 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
       )}
 
       {phase === "practice" && (
-        <div className="hl__card">
+        <div className="hl__card glass">
           <p className="hl__tag">Your turn</p>
           <h2 className="hl__h">Make the letter {lesson.letter}</h2>
           <p className="hl__sub">{lesson.clue}</p>
-          <div className="hl__cam">
+          <div className="hl__cam sd-viewfinder">
             {stream ? (
               <video ref={videoRef} className="hl__video" autoPlay playsInline muted />
             ) : (
@@ -275,7 +223,7 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
       )}
 
       {phase === "done" && (
-        <div className="hl__card">
+        <div className="hl__card glass">
           <p className="hl__tag">Complete</p>
           <h2 className="hl__h">Nice work!</h2>
           <p className="hl__sub">You finished {lessons.length} handshapes and scored {score} points.</p>
@@ -284,7 +232,7 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
       )}
 
       {phase === "failed" && (
-        <div className="hl__card">
+        <div className="hl__card glass">
           <p className="hl__tag">Out of hearts</p>
           <h2 className="hl__h">Let's try that again</h2>
           <p className="hl__sub">You reached lesson {idx + 1} and scored {score} points.</p>

@@ -1,0 +1,29 @@
+import Camera from './Camera.jsx';
+
+/** Presentation only: App owns the race engine and webcam recognition. */
+export default function RaceScreen({ gameState, mode, cameraIds, devices, rawLetters, events, onLandmarks, onSimulate, onExit, sequence }) {
+  return (
+    <section className="sd-race">
+      <header className="sd-race-header">
+        <div><p className="sd-eyebrow">{mode === 'versus' ? 'Duo competition' : 'Solo challenge'}</p><h2>{Math.ceil(gameState.remainingSeconds)}s remaining</h2></div>
+        <button className="sd-button sd-button-secondary" onClick={onExit}>Exit race</button>
+      </header>
+      <p className="sd-hint">Show the target sign steadily, then release your hand before your next sign. Live recognition supports A, B and L.</p>
+      <div className="sd-race-grid">
+        {gameState.players.map(player => (
+          <article className="sd-player" key={player.id}>
+            <div className="sd-player-head"><h3>{player.name}</h3><span className="sd-badge">{mode === 'versus' ? `${player.competitionScore} pts` : `${player.hearts} ♥`}</span></div>
+            {gameState.status === 'running' && <Camera deviceId={cameraIds[player.id] || undefined} onLandmarks={landmarks => onLandmarks(player.id, landmarks)} />}
+            <p className="sd-caption">{devices.find(d => d.deviceId === cameraIds[player.id])?.label || 'Default camera'}</p>
+            <div className="sd-target"><span>Make this sign</span><strong>{player.currentTarget || '✓'}</strong><span>Detected: <b>{rawLetters[player.id] || '—'}</b></span></div>
+            <div className="sd-letters" aria-label={`${player.name} target letters`}>{sequence.map((letter, i) => <span key={i} className={i < player.progress ? 'complete' : i === player.progress ? 'current' : ''}>{letter}</span>)}</div>
+            <progress max={sequence.length} value={player.progress} />
+            <div className="sd-stats"><span>Correct <b>{player.correct}</b></span><span>Mistakes <b>{player.mistakes}</b></span><span>Accuracy <b>{player.accuracy}%</b></span><span>SPM <b>{player.spm}</b></span></div>
+            <p className="sd-feedback" aria-live="polite">{events[player.id]}</p>
+            {gameState.status === 'running' && <details className="sd-debug"><summary>Developer tests (simulated, not camera)</summary>{['A','B','L'].map(letter => <button key={letter} onClick={() => onSimulate(player.id, letter)}>Simulate {letter}</button>)}</details>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}

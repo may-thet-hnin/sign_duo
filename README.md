@@ -9,3 +9,5 @@ Sign Duo teaches users the letters of ASL and checks accuracy using computer vis
 - [ASL-landmark-mlp](https://huggingface.co/nocontextdoruk/asl-landmark-mlp) to classify ASL signs
 - [Camo App](https://camo.com/) for the second webcam (1v1 "signs per minute" contest)
 
+
+

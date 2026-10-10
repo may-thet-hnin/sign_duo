@@ -276,14 +276,10 @@ export class RaceEngine {
   getSPM(player, now = Date.now()) {
     const { elapsedSeconds } = this.getTime(now);
 
-    // Include individual mistake penalties in effective time.
-    const effectiveSeconds =
-      elapsedSeconds + player.penaltySeconds;
-
-    if (effectiveSeconds <= 0) return 0;
+    if(elapsedSeconds <= 0) return 0;
 
     return Number(
-      (player.correct * 60 / effectiveSeconds).toFixed(1)
+      ((player.correct + player.mistakes) * 60 / elapsedSeconds).toFixed(1)
     );
   }
 
@@ -299,11 +295,12 @@ export class RaceEngine {
 
   getCompetitionScore(player, now = Date.now()) {
     const spm = this.getSPM(player, now);
+    const accuracy = this.getAccuracy(player) / 100;
 
     // Tunable starting weights: 70% correct letters,
     // 30% adjusted SPM.
     return Number(
-      (player.correct * 0.7 + spm * 0.3).toFixed(2)
+      (spm * accuracy).toFixed(2)
     );
   }
 

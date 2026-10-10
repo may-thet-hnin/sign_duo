@@ -1,30 +1,39 @@
-import { isFingerExtended, getDistance, FINGER_INDICES } from './handGeometry.js';
+import { isFingerExtended, getDistance } from './handGeometry.js';
 
-/** Classify a 21-point hand landmark set as A, B, L, or no match. */
+// Angle in the camera's XY plane. Unchanged by in-plane hand rotation.
+function thumbIndexAngle(points) {
+  const thumb = { x: points[4].x - points[2].x, y: points[4].y - points[2].y };
+  const index = { x: points[8].x - points[5].x, y: points[8].y - points[5].y };
+  const lengths = Math.hypot(thumb.x, thumb.y) * Math.hypot(index.x, index.y);
+  if (lengths < 0.00001) return 0;
+  const cos = Math.max(-1, Math.min(1, (thumb.x * index.x + thumb.y * index.y) / lengths));
+  return Math.acos(cos) * (180 / Math.PI);
+}
+
+// Experimental static handshape heuristics for A, B and L.
+// Confirm results against an ASL reference and calibrate with multiple people.
 export function recognizeLetter(landmarks) {
-	if (!Array.isArray(landmarks) || landmarks.length < 21) return null;
+  if (!Array.isArray(landmarks) || landmarks.length !== 21 ||
+      landmarks.some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
 
-	const indexExtended = isFingerExtended(landmarks, 'index');
-	const middleExtended = isFingerExtended(landmarks, 'middle');
-	const ringExtended = isFingerExtended(landmarks, 'ring');
-	const pinkyExtended = isFingerExtended(landmarks, 'pinky');
-	const thumbExtended = isFingerExtended(landmarks, 'thumb');
+  const index = isFingerExtended(landmarks, 'index');
+  const middle = isFingerExtended(landmarks, 'middle');
+  const ring = isFingerExtended(landmarks, 'ring');
+  const pinky = isFingerExtended(landmarks, 'pinky');
+  const thumb = isFingerExtended(landmarks, 'thumb');
+  const palmWidth = getDistance(landmarks[5], landmarks[17]);
+  if (!Number.isFinite(palmWidth) || palmWidth < 0.001) return null;
 
-	const curledFingers = !indexExtended && !middleExtended && !ringExtended && !pinkyExtended;
-	const straightFingers = indexExtended && middleExtended && ringExtended && pinkyExtended;
-
-	// A folded thumb lies across the palm, near the index-finger MCP joint.
-	// The palm width makes this test scale-independent.
-	const indices = FINGER_INDICES || {};
-	const thumbTipIndex = indices.thumb?.tip ?? 4;
-	const indexBaseIndex = indices.index?.mcp ?? indices.index?.base ?? 5;
-	const palmWidth = getDistance(landmarks[5], landmarks[17]);
-	const thumbAcrossPalm = palmWidth > 0 &&
-		getDistance(landmarks[thumbTipIndex], landmarks[indexBaseIndex]) < palmWidth * 0.65;
-
-	if (curledFingers && thumbExtended) return 'A';
-	if (straightFingers && !thumbExtended && thumbAcrossPalm) return 'B';
-	if (thumbExtended && indexExtended && !middleExtended && !ringExtended && !pinkyExtended) return 'L';
-
-	return null;
+  // For B, the thumb typically folds across the palm and four fingers extend.
+  const thumbAcrossPalm = getDistance(landmarks[4], landmarks[5]) < palmWidth * 0.85;
+  if (index && middle && ring && pinky && thumbAcrossPalm) return 'B';
+  // The thumb-index opening is less dependent on whether the hand is tilted
+  // sideways than the original thumb-extension threshold alone.
+  const opening = thumbIndexAngle(landmarks);
+  const thumbTipFarFromIndexBase = getDistance(landmarks[4], landmarks[5]) > palmWidth * 0.95;
+  if (index && !middle && !ring && !pinky &&
+      !thumbAcrossPalm && thumbTipFarFromIndexBase &&
+      opening >= 40 && opening <= 145) return 'L';
+  if (!index && !middle && !ring && !pinky && thumb && !thumbAcrossPalm) return 'A';
+  return null;
 }

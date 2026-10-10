@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 /* ---------- Lesson content: edit or extend freely ---------- */
 // Put sign images in your public folder (e.g. /public/signs/a.png) and set `image`.
 // Without an image, a placeholder with the letter is shown.
-const LESSONS = [
+export const LESSONS = [
   {
     id: "a", letter: "A", name: "Fist with thumb alongside",
     image: null,
@@ -118,9 +118,9 @@ function SignImage({ lesson }) {
 }
 
 // Three options, with the correct one in a position that varies by lesson.
-function buildOptions(idx) {
-  const n = LESSONS.length;
-  const opts = [LESSONS[idx], LESSONS[(idx + 1) % n], LESSONS[(idx + 3) % n]];
+function buildOptions(idx, lessons) {
+  const n = lessons.length;
+  const opts = [lessons[idx], lessons[(idx + 1) % n], lessons[(idx + 2) % n]];
   const shift = idx % 3;
   return opts.map((_, i) => opts[(i + shift) % 3]);
 }
@@ -136,7 +136,7 @@ export default function HandshapeLessons({ lessons = LESSONS, onFinish }) {
   const videoRef = useRef(null);
 
   const lesson = lessons[idx];
-  const options = buildOptions(idx);
+  const options = buildOptions(idx, lessons);
   const completed = phase === "done" ? lessons.length : idx;
   const pct = Math.round((completed / lessons.length) * 100);
 

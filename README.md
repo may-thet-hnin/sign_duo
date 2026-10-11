@@ -145,10 +145,10 @@ Potential extensions include expanding the recognized fingerspelling alphabet, e
 
 | Team member | Contribution |
 |---|---|
-| **[Name]** | MediaPipe / webcam tracking |
-| **[Name]** | ASL recognition and prediction validation |
-| **[Name]** | UI/UX and game screens |
-| **[Name]** | Game logic, integration, and deployment |
+| **Ye Yint Thway** | MediaPipe / webcam tracking |
+| **May Thet Hnin** | ASL recognition and prediction validation |
+| **Lucas Nguyen** | UI/UX and game screens |
+| **Max Keegan** | Game logic, integration, and deployment |
 
 ---
 

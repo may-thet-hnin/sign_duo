@@ -230,53 +230,82 @@ export class RaceEngine {
   }
 
   end(now = this.clock(), reason = "manual") {
-    if (this.status !== "running") {
-      return this.getResults(now);
-    }
-    this.status = "finished";
-    this.endedAt = now;
-    this.endReason = reason;
-
-    // Highest score wins. Equal scores fall back to fewer mistakes; equal on
-    // both is a genuine tie.
-    if (this.mode === 'versus') {
-      const [first, second] = this.getResults(now).ranking;
-      if (first.score !== second.score) {
-        this.winnerId = first.id; this.winReason = "more_points";
-      } else if (first.mistakes !== second.mistakes) {
-        this.winnerId = first.id; this.winReason = "fewer_mistakes";
-      }
-    }
+  if (this.status !== "running") {
     return this.getResults(now);
   }
+  this.status = "finished";
+  this.endedAt = now;
+  this.endReason = reason;
 
-  getSPM(player, now = this.clock()) {
-    const { elapsedSeconds } = this.getTime(now);
-    if (elapsedSeconds <= 0) return 0;
-    return Number(((player.correct + player.mistakes) * 60 / elapsedSeconds).toFixed(1));
+  // Versus Mode Winner Determination
+  if (this.mode === 'versus') {
+    const [first, second] = this.getResults(now).ranking;
+    
+    // 1. Highest Net Competition Score Wins
+    if (first.score !== second.score) {
+      this.winnerId = first.id; 
+      this.winReason = "more_points";
+    } 
+    // 2. Tie-breaker 1: Fewer mistakes
+    else if (first.mistakes !== second.mistakes) {
+      this.winnerId = first.id; 
+      this.winReason = "fewer_mistakes";
+    } 
+    // 3. Tie-breaker 2: Higher Raw SPM
+    else if (first.spm !== second.spm) {
+      this.winnerId = first.id; 
+      this.winReason = "higher_raw_speed";
+    }
   }
+  return this.getResults(now);
+}
 
-  getAccuracy(player) {
-    const attempts = player.correct + player.mistakes;
-    if (attempts === 0) return 0;
-    return Number((player.correct * 100 / attempts).toFixed(1));
-  }
+// Monkeytype Raw Speed equivalent (Keystrokes per Minute)
+getSPM(player, now = this.clock()) {
+  const { elapsedSeconds } = this.getTime(now);
+  if (elapsedSeconds <= 0) return 0;
 
-  getPlayerSnapshot(player, now = this.clock()) {
-    // A short window of the shared sequence: two completed signs, the
-    // current one, and the next five.
-    const from = Math.max(0, player.progress - 2);
-    return {
-      ...player,
-      score: player.correct * POINTS_PER_SIGN,
-      currentTarget: this.getCurrentTarget(player.id),
-      challengeId: this.getChallengeId(player.id),
-      skipsLeft: Math.max(0, this.skipsPerRace - player.skipped),
-      window: { from, signs: Array.from({ length: player.progress - from + 6 }, (_, i) => this.signAt(from + i)) },
-      spm: this.getSPM(player, now),
-      accuracy: this.getAccuracy(player),
-    };
-  }
+  return Number(
+    ((player.correct + player.mistakes) * 60 / elapsedSeconds).toFixed(1)
+  );
+}
+
+getAccuracy(player) {
+  const attempts = player.correct + player.mistakes;
+  if (attempts === 0) return 0;
+
+  return Number(
+    (player.correct * 100 / attempts).toFixed(1)
+  );
+}
+
+// Monkeytype Net Speed equivalent (Net SPM)
+getCompetitionScore(player, now = this.clock()) {
+  const { elapsedSeconds } = this.getTime(now);
+  if (elapsedSeconds <= 0) return 0;
+
+  // Net speed: calculates SPM purely on successfully completed signs/characters.
+  const netSpm = (player.correct * 60) / elapsedSeconds;
+
+  return Number(netSpm.toFixed(2));
+}
+
+getPlayerSnapshot(player, now = this.clock()) {
+  const from = Math.max(0, player.progress - 2);
+  return {
+    ...player,
+    score: this.getCompetitionScore(player, now), // Replaced flat score with Net SPM score
+    currentTarget: this.getCurrentTarget(player.id),
+    challengeId: this.getChallengeId(player.id),
+    skipsLeft: Math.max(0, this.skipsPerRace - player.skipped),
+    window: { 
+      from, 
+      signs: Array.from({ length: player.progress - from + 6 }, (_, i) => this.signAt(from + i)) 
+    },
+    spm: this.getSPM(player, now),          // Raw SPM
+    accuracy: this.getAccuracy(player),     // Accuracy %
+  };
+}
 
   getSnapshot(now = this.clock()) {
     return {

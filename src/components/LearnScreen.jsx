@@ -92,8 +92,8 @@ function Practice({ sign, onSuccess, onContinue, onSkip, previouslyPassed }) {
     <article className="learn-panel glass">
       <p className="learn-eyebrow">Camera practice</p>
       <h2>Practice <span className="learn-letter">{sign.letter}</span></h2>
-      <SignReference sign={sign} />
       <ol className="learn-instructions">{sign.steps.map(step => <li key={step}>{step}</li>)}</ol>
+      <SignReference sign={sign} />
       <p className="learn-tip">{sign.movement || 'Hold the sign steadily for about one second.'} Use one hand, good lighting, and keep your wrist and fingertips visible.</p>
       {sign.simplified && <p className="learn-note">Simplified HELLO practice checks open-hand motion only. It cannot verify forehead position or the complete ASL sign.</p>}
       <p className="learn-note">The preview is mirrored. Either hand is welcome; accuracy varies with angle and lighting.</p>
@@ -186,7 +186,14 @@ export default function LearnScreen() {
     });
     return () => { active = false; };
   }, [course]);
-  useEffect(() => { headingRef.current?.focus(); }, [view, position, lessonId]);
+  // Each lesson step starts with its heading at the top of the window, so the
+  // instructions and camera are visible without scrolling past the page header.
+  // The dashboard returns to the top of the page.
+  useEffect(() => {
+    headingRef.current?.focus({ preventScroll: true });
+    if (view === 'dashboard') window.scrollTo({ top: 0 });
+    else headingRef.current?.scrollIntoView({ block: 'start' });
+  }, [view, position, lessonId]);
 
   function updateProgress(update) {
     setCourse(old => updateLessonProgress(old, lessonId, update));

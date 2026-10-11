@@ -5,8 +5,7 @@ import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
 import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
-import { recognizeLetter } from './utils/recognizeLetter.js';
-import { LetterStabilizer } from './utils/stabilizeLetter.js';
+import RecognitionLab from './components/RecognitionLab.jsx';
 import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
@@ -26,7 +25,6 @@ function asResultPlayer(player, snapshot) {
 
 export default function App() {
   const engineRef = useRef(null);
-  const stabilizersRef = useRef({ p1: new LetterStabilizer(), p2: new LetterStabilizer() });
   const [screen, setScreen] = useState('home');
   const [mode, setMode] = useState('single');
   const [devices, setDevices] = useState([]);
@@ -68,7 +66,6 @@ export default function App() {
       if (mode === 'versus') engine.addPlayer('p2', 'Player 2');
       engine.start();
       engineRef.current = engine;
-      Object.values(stabilizersRef.current).forEach(s => s.reset());
       setRawLetters({ p1: null, p2: null });
       setEvents({ p1: 'Show the target sign to begin.', p2: 'Show the target sign to begin.' });
       setResults(null); setError(''); setGameState(engine.getSnapshot()); setScreen('race');
@@ -86,12 +83,13 @@ export default function App() {
     if (snapshot.status === 'finished') { setResults(engine.getResults()); setScreen('results'); }
   }
 
-  function handleLandmarks(playerId, landmarks) {
+  function handleRecognition(playerId, result) {
     if (engineRef.current?.status !== 'running') return;
-    const letter = recognizeLetter(landmarks);
+    const letter = result.candidate || result.letter || null;
     setRawLetters(previous => previous[playerId] === letter ? previous : { ...previous, [playerId]: letter });
-    const event = stabilizersRef.current[playerId].addFrame(letter);
-    if (event.isNew) submitAttempt(playerId, event.letter);
+    if (result.status === 'error') setEvents(previous => ({ ...previous, [playerId]: result.error }));
+    if (result.status === 'loading') setEvents(previous => ({ ...previous, [playerId]: 'Loading letter recognition…' }));
+    if (result.isNew) submitAttempt(playerId, result.letter);
   }
 
   useEffect(() => {
@@ -108,7 +106,6 @@ export default function App() {
 
   function goHome() {
     engineRef.current = null;
-    Object.values(stabilizersRef.current).forEach(s => s.reset());
     setGameState(null); setResults(null); setRawLetters({ p1: null, p2: null });
     setError(''); setScreen('home');
   }
@@ -133,6 +130,7 @@ export default function App() {
           </div>
         </div>
         <HeroLens />
+        {import.meta.env.DEV && <button className="sd-button sd-button-secondary" onClick={() => setScreen('lab')}>Recognition evaluation</button>}
         <div className="sd-feature-grid">
           <article className="sd-feature glass"><PixelSprite name="A" scale={4} /><h3>Learn</h3><p>Guided letters, camera-verified practice and knowledge checks.</p></article>
           <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>60 seconds to complete the sequence. Five hearts.</p></article>
@@ -140,6 +138,8 @@ export default function App() {
         </div>
         <p className="sd-hint">Live recognition currently supports A, B and L. Hold each sign steadily to complete camera practice.</p>
       </section>}
+
+      {screen === 'lab' && import.meta.env.DEV && <RecognitionLab onExit={goHome} />}
 
       {screen === 'learn' && <section className="sd-learn">
         <button className="sd-link" onClick={goHome}>Back to menu</button>
@@ -174,7 +174,7 @@ export default function App() {
         <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
       </section>}
 
-      {screen === 'race' && gameState && <RaceScreen gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} rawLetters={rawLetters} events={events} sequence={TEST_SEQUENCE} onLandmarks={handleLandmarks} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
+      {screen === 'race' && gameState && <RaceScreen gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} rawLetters={rawLetters} events={events} sequence={TEST_SEQUENCE} onRecognition={handleRecognition} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
 
       {screen === 'results' && results && (mode === 'versus'
         ? <ResultsScreen players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.ranking[0].competitionScore === results.ranking[1].competitionScore ? null : results.winner?.id} onRematch={startRace} onHome={goHome} />
@@ -189,6 +189,7 @@ export default function App() {
             </dl>
             <div className="sd-home-actions"><button className="sd-button sd-button-start" onClick={startRace}>Play again</button><button className="sd-button sd-button-secondary" onClick={goHome}>Back to menu</button></div>
           </section>)}
+      <p className="sd-hint">Recognition model: <a href="https://huggingface.co/nocontextdoruk/asl-landmark-mlp" target="_blank" rel="noreferrer">Doruk Doğular · CC BY-NC 4.0</a>. Dataset: <a href="https://data.mendeley.com/datasets/j4y5w2c8w9/1" target="_blank" rel="noreferrer">Pranto et al., ASL-HG (2026) · CC BY 4.0</a>.</p>
     </main>
   </>;
 }

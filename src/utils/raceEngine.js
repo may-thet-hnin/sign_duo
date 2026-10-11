@@ -9,7 +9,7 @@
  * No React, webcam, model, or backend dependencies.
  */
 
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+import { SUPPORTED_SIGNS } from '../recognition/config.js';
 
 export class RaceEngine {
   constructor({
@@ -18,7 +18,6 @@ export class RaceEngine {
     startingHearts = 5,
     penaltySeconds = 2,
     targetLetters = null,
-    countJAndZ = true,
   } = {}) {
     if (!["single", "versus"].includes(mode)) {
       throw new Error('Mode must be "single" or "versus".');
@@ -28,12 +27,14 @@ export class RaceEngine {
     this.durationSeconds = durationSeconds;
     this.startingHearts = startingHearts;
     this.penaltySeconds = penaltySeconds;
-    this.countJAndZ = countJAndZ;
 
     this.targetLetters = targetLetters
       ? targetLetters.map((letter) => letter.toUpperCase())
       : this.generateLetters(500);
 
+    if (!this.targetLetters.length || this.targetLetters.some(letter => !SUPPORTED_SIGNS.competition.includes(letter))) {
+      throw new Error('Competition targets must be approved letters: A, B, L.');
+    }
     this.players = new Map();
     this.status = "waiting";
     this.startedAt = null;
@@ -42,9 +43,7 @@ export class RaceEngine {
   }
 
   generateLetters(count) {
-    const letters = this.countJAndZ
-      ? ALPHABET
-      : ALPHABET.replace(/[JZ]/g, "");
+    const letters = SUPPORTED_SIGNS.competition;
 
     return Array.from({ length: count }, () => {
       return letters[Math.floor(Math.random() * letters.length)];
@@ -161,7 +160,7 @@ export class RaceEngine {
       .trim()
       .toUpperCase();
 
-    if (!/^[A-Z]$/.test(letter)) {
+    if (!SUPPORTED_SIGNS.competition.includes(letter)) {
       return { accepted: false, reason: "invalid_letter" };
     }
 

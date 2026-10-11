@@ -128,7 +128,9 @@ test('solo hearts, duo penalties, results and race stabilization retain behavior
   assert.equal(duo.status, 'running');
   duo.submitLetter('p2', 'A', 2000);
   assert.equal(duo.status, 'finished');
-  assert.equal(duo.getResults(2000).winner.id, 'p1');
+  // Existing formula gives equal competition scores here; SPM breaks the tie.
+  assert.equal(duo.getResults(2000).players[0].competitionScore, duo.getResults(2000).players[1].competitionScore);
+  assert.equal(duo.getResults(2000).winner.id, 'p2');
   const stable = new LetterStabilizer();
   for (let i = 0; i < 5; i++) assert.equal(stable.addFrame('A').isNew, false);
   assert.equal(stable.addFrame('A').isNew, true);

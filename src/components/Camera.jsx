@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import HandOverlay from './HandOverlay.jsx'
 import useHandTracking from '../hooks/useHandTracking.js'
+import { RecognitionController } from '../recognition/controller.js'
+import { requestModel } from '../recognition/modelClient.js'
+import { releaseCamera } from '../recognition/cameraResources.js'
 
 /**
  * Webcam + MediaPipe hand tracking.
@@ -8,16 +11,41 @@ import useHandTracking from '../hooks/useHandTracking.js'
  * @param {string | undefined} deviceId  Optional camera id for two-player mode
  * @param {(landmarks: {x:number,y:number,z:number}[] | null) => void} onLandmarks
  */
-export default function Camera({ deviceId, onLandmarks, onStatus }) {
+export default function Camera({ deviceId, onLandmarks, onStatus, onRecognition }) {
   // A device change gets fresh state and fully tears down the previous session.
-  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} />
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} onRecognition={onRecognition} />
 }
 
-function CameraSession({ deviceId, onLandmarks, onStatus }) {
+function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition }) {
   const videoRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraLoading, setCameraLoading] = useState(true)
   const [cameraError, setCameraError] = useState(null)
+  const controllerRef = useRef(null)
+  const recognitionEnabled = Boolean(onRecognition)
+  const recognitionCallback = useRef(onRecognition)
+  useEffect(() => { recognitionCallback.current = onRecognition }, [onRecognition])
+  useEffect(() => {
+    if (!cameraReady || !recognitionEnabled) return undefined
+    let cancelled = false
+    const controller = new RecognitionController({ infer: requestModel,
+      onResult: result => recognitionCallback.current?.(result) })
+    controllerRef.current = controller
+    recognitionCallback.current?.({ status: 'loading', letter: null, progress: 0 })
+    let ready = false
+    let lastFrame = performance.now()
+    controllerRef.current.feed = points => {
+      lastFrame = performance.now()
+      if (ready) controller.process(points, lastFrame)
+    }
+    requestModel().then(() => { if (!cancelled) ready = true }).catch(error => {
+      if (!cancelled) recognitionCallback.current?.({ status: 'error', error: error.message, letter: null, progress: 0 })
+    })
+    const watchdog = setInterval(() => {
+      if (ready && performance.now() - lastFrame > 350) controller.invalidate('tracking-paused', performance.now())
+    }, 150)
+    return () => { cancelled = true; clearInterval(watchdog); controller.dispose(); controllerRef.current = null }
+  }, [cameraReady, recognitionEnabled])
 
   useEffect(() => {
     let cancelled = false
@@ -84,16 +112,14 @@ function CameraSession({ deviceId, onLandmarks, onStatus }) {
 
     return () => {
       cancelled = true
-      if (video) {
-        video.srcObject = null
-      }
-      stream?.getTracks().forEach((track) => track.stop())
+      releaseCamera(video, stream)
     }
   }, [deviceId])
 
   const handleLandmarks = useCallback(
     (nextLandmarks) => {
       onLandmarks?.(nextLandmarks)
+      controllerRef.current?.feed(nextLandmarks)
     },
     [onLandmarks],
   )

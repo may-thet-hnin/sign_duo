@@ -1,3 +1,4 @@
+import { SUPPORTED_SIGNS } from '../recognition/config.js';
 export const REFERENCE_URL = 'https://www.lifeprint.com/asl101/fingerspelling/abc.htm';
 
 // Photographic references from ASL University, never generated handshapes.
@@ -23,7 +24,10 @@ export const LESSONS = [
     mistake: 'Keep the other three fingers curled and the thumb open. Use a comfortable wrist position.',
     description: 'An upright index finger and sideways thumb; the remaining fingers are curled.',
   },
-];
+].filter(sign => SUPPORTED_SIGNS.learning.includes(sign.letter)).map(sign => ({
+  ...sign, category: 'alphabet', recognitionMethod: 'onnx-mlp', enabled: true,
+  modes: ['learning', ...(SUPPORTED_SIGNS.competition.includes(sign.letter) ? ['competition'] : [])],
+}));
 
 // Different order from the guided sequence; the answer is not always option one.
 export const QUIZ_SIGNS = ['B', 'L', 'A'];

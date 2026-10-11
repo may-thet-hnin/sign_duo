@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import Camera from './Camera.jsx';
 import PixelSprite from './Pixel.jsx';
-import { recognizeLetter } from '../utils/recognizeLetter.js';
+import RecognitionDebug from './RecognitionDebug.jsx';
 import { LESSONS, QUIZ_SIGNS, REFERENCE_URL } from '../utils/lessonContent.js';
-import { PracticeHold, handInFrame, emptyProgress, parseProgress, PROGRESS_KEY, recordPractice, recordAnswer, advanceProgress, replayProgress } from '../utils/learning.js';
+import { emptyProgress, parseProgress, PROGRESS_KEY, recordPractice, recordAnswer, advanceProgress, replayProgress } from '../utils/learning.js';
 import '../styles/learning.css';
 
 function SignReference({ sign, quiz = false, onReady }) {
@@ -27,7 +27,7 @@ function ProgressBar({ value, label }) {
 }
 
 function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
-  const hold = useRef(new PracticeHold(sign.letter));
+  const [recognition, setRecognition] = useState(null);
   const credited = useRef(false);
   const feedbackCandidate = useRef({ text: '', since: 0 });
   const lastFrame = useRef(null);
@@ -40,7 +40,6 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
   useEffect(() => {
     const watchdog = setInterval(() => {
       if (!credited.current && lastFrame.current !== null && performance.now() - lastFrame.current > 300) {
-        hold.current.reset();
         lastFrame.current = null;
         setResult({ progress: 0, complete: false });
         setDetected(null);
@@ -50,36 +49,38 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
     return () => clearInterval(watchdog);
   }, []);
 
-  function handleLandmarks(points) {
+  function handleRecognition(next) {
     if (credited.current) return;
-    const now = performance.now();
-    lastFrame.current = now;
-    const inFrame = handInFrame(points);
-    const letter = inFrame ? recognizeLetter(points) : null;
-    const next = hold.current.update(letter, now);
-    setResult(next);
-    setDetected(letter);
-    let text = !points ? 'Place your hand inside the camera frame.'
-      : !inFrame ? 'Move your hand back so it is fully visible.'
-      : !letter ? 'Adjust your hand position and try again.'
-      : letter !== sign.letter ? `I can see a ${letter}. Try making an ${sign.letter}.`
-      : 'Almost there! Hold your hand steady.';
-    if (next.complete) {
+    lastFrame.current = performance.now();
+    setRecognition(next);
+    const matching = (next.candidate || next.letter) === sign.letter;
+    const complete = next.status === 'stable' && next.letter === sign.letter;
+    setResult({ progress: matching ? next.progress : 0, complete });
+    setDetected(next.candidate || next.letter || null);
+    const text = next.status === 'error' ? `Recognition unavailable: ${next.error}`
+      : next.status === 'loading' ? 'Loading letter recognition?'
+      : next.status === 'no-hand' ? 'Show your hand to the camera.'
+      : next.status === 'tracking-paused' ? 'Tracking paused. Show your hand again.'
+      : next.status === 'out-of-frame' ? 'Make sure your entire hand is visible.'
+      : !matching && next.candidate ? `I detected ${next.candidate}. Try making ${sign.letter}.`
+      : matching ? 'Almost there! Hold your hand steady.'
+      : "I can see your hand, but I can?t recognize the sign yet.";
+    if (complete) {
       credited.current = true;
-      text = `Correct! You’re signing ${sign.letter}!`;
-      setFeedback(text);
+      setFeedback(`Correct! You signed ${sign.letter}.`);
       onSuccess(sign.letter);
       return;
     }
+    const now = performance.now();
     if (feedbackCandidate.current.text !== text) feedbackCandidate.current = { text, since: now };
-    if (now - feedbackCandidate.current.since >= 200) setFeedback(text);
+    if (next.status === 'error' || next.status === 'loading' || now - feedbackCandidate.current.since >= 200) setFeedback(text);
   }
 
   function tryAgain() {
-    hold.current.reset();
     credited.current = false;
     setResult({ progress: 0, complete: false });
     setDetected(null);
+    setRecognition(null);
     setFeedback('Show your hand to the camera to begin.');
     feedbackCandidate.current = { text: '', since: 0 };
     lastFrame.current = null;
@@ -93,18 +94,19 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
       <h2>Make the letter <span className="learn-letter">{sign.letter}</span></h2>
       <SignReference sign={sign} />
       <ol className="learn-instructions">{sign.steps.map(step => <li key={step}>{step}</li>)}</ol>
-      <p className="learn-tip">Use one hand, good lighting, and keep your wrist and fingertips visible. Hold the recognized sign for 1.5 seconds.</p>
+      <p className="learn-tip">Use one hand, good lighting, and keep your wrist and fingertips visible. Hold the sign steadily for about one second.</p>
       <p className="learn-note">The preview is mirrored. Either hand is welcome; accuracy varies with angle and lighting.</p>
     </article>
     <article className={`learn-panel learn-camera glass ${result.complete ? 'learn-success' : ''}`}>
       <div className="learn-camera__heading"><h3>Your turn</h3><span className="learn-pill">Target {sign.letter}</span></div>
-      <Camera key={retry} onLandmarks={handleLandmarks} onStatus={setCameraStatus} />
+      <Camera key={retry} onRecognition={handleRecognition} onStatus={setCameraStatus} />
       <div className="learn-readouts"><span>{cameraStatus.error ? 'Camera needs attention' : cameraStatus.ready ? 'Hand tracking ready' : 'Preparing camera'}</span><span>Detected: <strong>{detected || '—'}</strong></span></div>
       <p className="learn-feedback" data-success={result.complete} role="status">
         {cameraStatus.error ? 'Allow camera access or check your connection, then try again.' : feedback}
       </p>
       <ProgressBar value={result.progress * 100} label="Stable recognition" />
       <p className="learn-note">{result.complete ? 'Practice verified. Great work!' : `${Math.round(result.progress * 100)}% · Hold a matching sign steadily`}</p>
+      {import.meta.env.DEV && <RecognitionDebug result={recognition} target={sign.letter} />}
       <div className="learn-actions">
         <button className="sd-button sd-button-secondary" onClick={tryAgain}>Try again</button>
         <button className="sd-button" disabled={!result.complete && !previouslyPassed} onClick={onContinue}>Continue</button>

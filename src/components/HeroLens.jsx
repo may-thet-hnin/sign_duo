@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import PixelSprite from './Pixel.jsx';
+import { SUPPORTED_SIGNS } from '../recognition/config.js';
 
-const LETTERS = ['A', 'B', 'L'];
+const LETTERS = SUPPORTED_SIGNS.learning;
 
 /** Title-screen centrepiece: a glass lens that cycles through the signs the game can recognise. */
 export default function HeroLens() {

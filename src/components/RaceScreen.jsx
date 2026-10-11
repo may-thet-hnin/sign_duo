@@ -2,7 +2,7 @@ import Camera from './Camera.jsx';
 import PixelSprite from './Pixel.jsx';
 
 /** Presentation only: App owns the race engine and webcam recognition. */
-export default function RaceScreen({ gameState, mode, cameraIds, devices, rawLetters, events, onLandmarks, onSimulate, onExit, sequence }) {
+export default function RaceScreen({ gameState, mode, cameraIds, devices, rawLetters, events, onRecognition, onSimulate, onExit, sequence }) {
   const seconds = Math.ceil(gameState.remainingSeconds);
   const low = seconds <= 10;
 
@@ -28,7 +28,7 @@ export default function RaceScreen({ gameState, mode, cameraIds, devices, rawLet
               </span>
             </div>
 
-            {gameState.status === 'running' && <Camera deviceId={cameraIds[player.id] || undefined} onLandmarks={landmarks => onLandmarks(player.id, landmarks)} />}
+            {gameState.status === 'running' && <Camera deviceId={cameraIds[player.id] || undefined} onRecognition={result => onRecognition(player.id, result)} />}
             <p className="sd-caption">{devices.find(d => d.deviceId === cameraIds[player.id])?.label || 'Default camera'}</p>
 
             <div className="sd-target">
@@ -52,7 +52,7 @@ export default function RaceScreen({ gameState, mode, cameraIds, devices, rawLet
             </div>
             <p className="sd-feedback" aria-live="polite">{events[player.id]}</p>
 
-            {gameState.status === 'running' && (
+            {import.meta.env.DEV && gameState.status === 'running' && (
               <details className="sd-debug">
                 <summary>Developer tests (simulated, not camera)</summary>
                 {['A', 'B', 'L'].map(letter => <button key={letter} className="sd-button sd-button-secondary sd-small" onClick={() => onSimulate(player.id, letter)}>Simulate {letter}</button>)}

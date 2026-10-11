@@ -4,6 +4,7 @@ import useHandTracking from '../hooks/useHandTracking.js'
 import { RecognitionController } from '../recognition/controller.js'
 import { requestModel } from '../recognition/modelClient.js'
 import { releaseCamera } from '../recognition/cameraResources.js'
+import { SUPPORTED_SIGNS } from '../recognition/config.js'
 
 // Fields the screens display or act on. Results that only differ elsewhere
 // (for example raw probabilities) are not forwarded, which keeps React
@@ -18,12 +19,12 @@ function displayKey(result) {
  *
  * @param {string | undefined} deviceId  Optional camera id for two-player mode
  */
-export default function Camera({ deviceId, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true }) {
+export default function Camera({ deviceId, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true, allowlist = SUPPORTED_SIGNS.learning, ghost = null }) {
   // A device change gets fresh state and fully tears down the previous session.
-  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} />
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} allowlist={allowlist} ghost={ghost} />
 }
 
-function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetSign, recognitionActive }) {
+function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetSign, recognitionActive, allowlist, ghost }) {
   const videoRef = useRef(null)
   const drawRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
@@ -52,7 +53,7 @@ function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetS
     let cancelled = false
     let lastKey = null
     let lastSentAt = 0
-    const controller = new RecognitionController({ infer: requestModel,
+    const controller = new RecognitionController({ infer: requestModel, allowlist,
       onResult: result => {
         if (result.status === 'error') setRecognitionError(result.error)
         // Unchanged results still go out every 250 ms: lesson feedback waits
@@ -88,7 +89,7 @@ function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetS
       if (ready && activeRef.current && performance.now() - lastFrame > 350) controller.invalidate('tracking-paused', performance.now())
     }, 150)
     return () => { cancelled = true; clearInterval(watchdog); controller.dispose(); controllerRef.current = null }
-  }, [cameraReady, recognitionEnabled])
+  }, [cameraReady, recognitionEnabled, allowlist])
 
   useEffect(() => {
     let cancelled = false
@@ -160,7 +161,7 @@ function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetS
   }, [deviceId])
 
   const handleFrame = useCallback((frame) => {
-    drawRef.current?.(frame.landmarks)
+    drawRef.current?.(frame.landmarks, frame.handedness)
     controllerRef.current?.feed(frame)
   }, [])
 
@@ -193,7 +194,7 @@ function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetS
           muted
           autoPlay
         />
-        <HandOverlay videoRef={videoRef} drawRef={drawRef} />
+        <HandOverlay videoRef={videoRef} drawRef={drawRef} ghost={ghost} />
         {cameraReady && modelReady && !error && <span className="sd-camera__live">Tracking</span>}
 
         {loading && (

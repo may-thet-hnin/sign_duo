@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { COURSE_LESSONS } from '../src/utils/lessonContent.js';
 import { SUPPORTED_SIGNS } from '../src/recognition/config.js';
 import { emptyProgress, emptyCourseProgress, parseCourseProgress, updateLessonProgress,
-  recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress, skipPractice, parseProgress } from '../src/utils/learning.js';
+  recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress, skipPractice, parseProgress, markAttempted } from '../src/utils/learning.js';
 
 function completeLesson(p, lesson) {
   for (const sign of lesson.signs) {
@@ -159,4 +159,35 @@ test('saved progress cannot claim a sign that was neither practiced nor skipped'
   const parsed = parseProgress(JSON.stringify(saved), lesson);
   assert.equal(parsed.position, 3, 'resume at the missing B practice');
   assert.deepEqual(parsed.skipped, []);
+});
+
+test('attempted status: Start until opened, then Restart/Continue, per lesson and across reloads', () => {
+  const [first, second] = COURSE_LESSONS;
+  let course = emptyCourseProgress();
+  assert.ok(COURSE_LESSONS.every(l => course.lessons[l.id].attempted === false), 'new learners see Start lesson');
+  // Opening a lesson marks it attempted, even before any activity is finished.
+  course = updateLessonProgress(course, first.id, markAttempted);
+  assert.equal(course.lessons[first.id].attempted, true);
+  assert.equal(course.lessons[second.id].attempted, false);
+  // Make progress, then reload.
+  course = updateLessonProgress(course, first.id, p => recordPractice(advanceProgress(p, first), 'A', first));
+  course = updateLessonProgress(course, first.id, p => advanceProgress(p, first));
+  const reloaded = parseCourseProgress(JSON.stringify(course));
+  assert.deepEqual(reloaded, course);
+  assert.equal(reloaded.lessons[first.id].position, 2, 'Continue resumes here');
+  // Restart: back to the beginning, still attempted, other lessons untouched.
+  const restarted = updateLessonProgress(reloaded, first.id, replayProgress);
+  assert.equal(restarted.lessons[first.id].position, 0);
+  assert.deepEqual(restarted.lessons[first.id].practiced, []);
+  assert.equal(restarted.lessons[first.id].attempted, true);
+  assert.deepEqual(restarted.lessons[first.id].mastered, ['A'], 'lifetime mastery is kept');
+  assert.deepEqual(restarted.lessons[second.id], reloaded.lessons[second.id]);
+  assert.deepEqual(parseCourseProgress(JSON.stringify(restarted)), restarted);
+  // Older saves without the flag count as attempted only if they show progress.
+  const legacy = emptyCourseProgress();
+  for (const lesson of COURSE_LESSONS) delete legacy.lessons[lesson.id].attempted;
+  legacy.lessons[first.id].position = 1;
+  const parsed = parseCourseProgress(JSON.stringify(legacy));
+  assert.equal(parsed.lessons[first.id].attempted, true);
+  assert.equal(parsed.lessons[second.id].attempted, false);
 });

@@ -5,19 +5,16 @@ import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
 import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
-import { RACE_DURATIONS, CHALLENGE_SEQUENCES, ALPHABET_SIGNS, WORD_SIGNS } from './recognition/config.js';
+import { RACE_DURATIONS, COMPETITION_POOLS, ALPHABET_SIGNS, WORD_SIGNS, POINTS_PER_SIGN } from './recognition/config.js';
 import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
-function asResultPlayer(player, snapshot, sequenceLength) {
+function asResultPlayer(player, snapshot) {
   return {
-    id: player.id, name: player.name,
-    score: Math.round((snapshot.mode === 'versus' ? player.competitionScore : player.correct) * 100),
+    id: player.id, name: player.name, score: player.score,
     lives: player.hearts ?? 0, maxLives: snapshot.mode === 'single' ? 5 : 0,
-    progress: (player.progress / sequenceLength) * 100,
     correct: player.correct, attempts: player.correct + player.mistakes,
-    bestStreak: player.bestStreak,
-    timeSeconds: snapshot.elapsedSeconds + player.penaltySeconds,
+    bestStreak: player.bestStreak, spm: player.spm, skipped: player.skipped,
   };
 }
 
@@ -29,7 +26,6 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const [mode, setMode] = useState('single');
   const [vocabulary, setVocabulary] = useState('alphabet');
-  const sequence = CHALLENGE_SEQUENCES[vocabulary];
   const [devices, setDevices] = useState([]);
   const [cameraIds, setCameraIds] = useState({ p1: '', p2: '' });
   const [deviceMessage, setDeviceMessage] = useState('');
@@ -80,7 +76,8 @@ export default function App() {
       if (mode === 'versus' && (!cameraIds.p1 || !cameraIds.p2 || cameraIds.p1 === cameraIds.p2)) {
         throw new Error('Duo Mode requires two different cameras. Find cameras and choose one for each player.');
       }
-      const engine = new RaceEngine({ mode, durationSeconds: duration, startingHearts: 5, penaltySeconds: 2, targetLetters: sequence });
+      // A new engine draws a new random sequence; duo players share it.
+      const engine = new RaceEngine({ mode, durationSeconds: duration, startingHearts: 5, pool: COMPETITION_POOLS[vocabulary] });
       engine.addPlayer('p1', 'Player 1');
       if (mode === 'versus') engine.addPlayer('p2', 'Player 2');
       stopRaceTimer();
@@ -101,7 +98,15 @@ export default function App() {
       if (engine.status === 'finished') publishRace(engine);
       return;
     }
-    setEvents(previous => ({ ...previous, [playerId]: `${simulated ? '[SIMULATED] ' : ''}${letter}: ${outcome.correct ? `Accepted! +1 · Next: ${outcome.nextTarget || 'Finished'}` : `Try again — expected ${outcome.target}`}` }));
+    setEvents(previous => ({ ...previous, [playerId]: `${simulated ? '[SIMULATED] ' : ''}${letter}: ${outcome.correct ? `Accepted! +${POINTS_PER_SIGN} · Next: ${outcome.nextTarget || '—'}` : `Try again — expected ${outcome.target}`}` }));
+    publishRace(engine);
+  }
+
+  function skipTarget(playerId, challengeId) {
+    const engine = engineRef.current;
+    if (!engine || engine.id !== gameState?.raceId || engine.status !== 'running') return;
+    // The challenge ID makes a double click skip only one sign.
+    engine.skip(playerId, challengeId);
     publishRace(engine);
   }
 
@@ -128,14 +133,19 @@ export default function App() {
     if (screen !== 'race' || gameState?.status !== 'running') return undefined;
     const engine = engineRef.current;
     if (!engine || engine.status !== 'running') return undefined;
-    const timer = setInterval(() => {
+    const tick = () => {
       if (engineRef.current !== engine || engine.status !== 'running') return;
       engine.updateTime();
       publishRace(engine);
-    }, 250);
+    };
+    // The interval refreshes the clock display; the timeout ends the race at
+    // the deadline itself rather than up to 250 ms later.
+    const timer = setInterval(tick, 250);
+    const deadline = setTimeout(tick, engine.getTime().remainingSeconds * 1000 + 1);
     timerRef.current = timer;
     return () => {
       clearInterval(timer);
+      clearTimeout(deadline);
       if (timerRef.current === timer) timerRef.current = null;
     };
   }, [screen, gameState?.status, gameState?.raceId, publishRace]);
@@ -223,18 +233,19 @@ export default function App() {
         <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
       </section>}
 
-      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} sequence={sequence} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
+      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onSkip={skipTarget} onExit={goHome} />}
 
       {screen === 'results' && results && (mode === 'versus'
-        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results, sequence.length))} winnerId={results.winnerId} winReason={results.winReason} onRematch={startRace} onHome={goHome} />
+        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.winnerId} winReason={results.winReason} onRematch={startRace} onHome={goHome} />
         : <section className="sd-solo-result glass">
             <PixelSprite name="trophy" scale={7} className="sd-trophy" />
-            <h1 className="sd-page-title">Great practice!</h1>
-            <p>{results.durationSeconds}-second race · Score: {results.players[0].correct}</p>
-            <h2>{results.players[0].correct} / {sequence.length} signs correct</h2>
+            <h1 className="sd-page-title">{results.endReason === 'out_of_hearts' ? 'Out of hearts!' : 'Great practice!'}</h1>
+            <p>{results.durationSeconds}-second race · Score: {results.players[0].score.toLocaleString()}</p>
+            <h2>{results.players[0].correct} sign{results.players[0].correct === 1 ? '' : 's'} correct</h2>
             <dl className="sd-result-stats">
               <div><dt>Accuracy</dt><dd>{results.players[0].accuracy}%</dd></div>
               <div><dt>Best streak</dt><dd>{results.players[0].bestStreak}</dd></div>
+              <div><dt>Skipped</dt><dd>{results.players[0].skipped}</dd></div>
               <div><dt>Signs per minute</dt><dd>{results.players[0].spm}</dd></div>
             </dl>
             <div className="sd-home-actions"><button className="sd-button sd-button-start" onClick={startRace}>Play again</button><button className="sd-button sd-button-secondary" onClick={goHome}>Back to menu</button></div>

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Camera from './Camera.jsx';
+import UnderstandingTest from './UnderstandingTest.jsx';
 import PixelSprite from './Pixel.jsx';
 import RecognitionDebug from './RecognitionDebug.jsx';
 import { COURSE_LESSONS, REFERENCE_URL } from '../utils/lessonContent.js';
 import { SUPPORTED_SIGNS } from '../recognition/config.js';
-import { emptyCourseProgress, parseCourseProgress, COURSE_PROGRESS_KEY, PROGRESS_KEY, updateLessonProgress, recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress, skipPractice } from '../utils/learning.js';
+import { emptyCourseProgress, parseCourseProgress, COURSE_PROGRESS_KEY, PROGRESS_KEY, updateLessonProgress, recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress, skipPractice, markAttempted, recordTestResult } from '../utils/learning.js';
+import { TEST_LENGTH } from '../utils/understandingTest.js';
 import '../styles/learning.css';
 
 function SignReference({ sign, quiz = false, onReady }) {
@@ -199,6 +201,7 @@ export default function LearnScreen() {
     setCourse(old => updateLessonProgress(old, lessonId, update));
   }
   function openLesson(id) {
+    setCourse(old => updateLessonProgress(old, id, markAttempted));
     setLessonId(id);
     setView('lesson');
   }
@@ -211,7 +214,7 @@ export default function LearnScreen() {
   }
 
   return <section className="learning" aria-label="Sign language learning">
-    <h2 ref={headingRef} tabIndex={-1} className="learn-heading">{view === 'dashboard' ? 'Master signs one lesson at a time.' : progress.completed ? `${lesson.title} completed!` : `${lesson.title} · ${position < lesson.practiceActivities ? sign.letter : 'Review'}`}</h2>
+    <h2 ref={headingRef} tabIndex={-1} className="learn-heading">{view === 'dashboard' ? 'Master signs one lesson at a time.' : view === 'test' ? `${lesson.title} · Test` : progress.completed ? `${lesson.title} completed!` : `${lesson.title} · ${position < lesson.practiceActivities ? sign.letter : 'Review'}`}</h2>
     {saveError && <p className="sd-error" role="alert">Your browser could not save progress. You can keep learning, but this attempt may be lost after a refresh.</p>}
     {view === 'dashboard' ? <>
       <p className="learn-intro">Each lesson teaches a small group of signs with guided references, camera practice, and knowledge checks. Take your time. There are no lost hearts here.</p>
@@ -234,11 +237,25 @@ export default function LearnScreen() {
             <ProgressBar value={saved.position / item.activityCount * 100} label={`${item.title} lesson progress`} />
             <p className="learn-note">{saved.completed ? `Complete · Quiz ${score} / ${item.quiz.length}${saved.skipped.length ? ` · ${saved.skipped.length} skipped` : ''}` : saved.position > 0 ? `In progress · Activity ${saved.position + 1} / ${item.activityCount}` : `Ready when you are · ${item.activityCount} activities`}</p>
             {saved.completions > 0 && !saved.completed && <p className="learn-note">Previously completed · Replay in progress</p>}
-            <button className="sd-button" onClick={() => saved.completed ? replay(item.id) : openLesson(item.id)}>{saved.completed ? 'Replay lesson' : saved.position > 0 ? 'Continue lesson' : 'Start lesson'}</button>
+            {saved.attempted
+              ? <div className="learn-split">
+                  <button className="sd-button sd-button-secondary" onClick={() => replay(item.id)}>Restart lesson</button>
+                  <button className="sd-button" onClick={() => openLesson(item.id)}>Continue</button>
+                </div>
+              : <button className="sd-button" onClick={() => openLesson(item.id)}>Start lesson</button>}
+            <button className="sd-button sd-button-secondary learn-test-button" onClick={() => { setLessonId(item.id); setView('test'); }}>Test your understanding</button>
+            {saved.testBest !== null && <p className="learn-note">Best test: {saved.testBest} / {TEST_LENGTH} right first try</p>}
           </article>;
         })}</div>
       </section>)}
       <p className="learn-note">Recognition is an experimental practice aid. Words require motion; HELLO is simplified. An ASL teacher can help with technique and variations.</p>
+    </> : view === 'test' ? <>
+      <div className="learn-journey glass">
+        <button className="sd-link" onClick={() => setView('dashboard')}>Back to lessons</button>
+        <div><span>Test your understanding · {TEST_LENGTH} random signs from {lesson.signs.join(', ')} · No timer, no skips</span></div>
+      </div>
+      <UnderstandingTest key={lessonId} lesson={lesson}
+        onFinish={score => updateProgress(old => recordTestResult(old, score))} onExit={() => setView('dashboard')} />
     </> : <>
       <div className="learn-journey glass">
         <button className="sd-link" onClick={() => setView('dashboard')}>Back to lessons</button>

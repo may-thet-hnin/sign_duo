@@ -45,21 +45,22 @@ test('storage recovers invalid data and resumes only consistent checkpoints', ()
   assert.deepEqual(parseProgress('{"version":1,"practiced":"ABL"}').practiced, []);
 });
 
-test('solo hearts, duo penalties, results and race stabilization retain behavior', () => {
-  const solo = new RaceEngine({ targetLetters: ['A'], startingHearts: 5 });
+test('solo hearts and duo scoring behave in timed rounds', () => {
+  const solo = new RaceEngine({ pool: ['A', 'B'], random: () => 0, startingHearts: 5, durationSeconds: 10 });
   solo.addPlayer('p1'); solo.start(0);
   solo.submitLetter('p1', 'B', 100);
   assert.equal(solo.getPlayer('p1').hearts, 4);
   solo.submitLetter('p1', 'A', 1000);
-  assert.equal(solo.status, 'finished');
+  assert.equal(solo.status, 'running', 'a correct sign moves on to the next one');
   assert.equal(solo.getResults(1000).players[0].accuracy, 50);
-  const duo = new RaceEngine({ mode: 'versus', targetLetters: ['A'] });
+  const duo = new RaceEngine({ mode: 'versus', pool: ['A', 'B'], random: () => 0, durationSeconds: 10 });
   duo.addPlayer('p1'); duo.addPlayer('p2'); duo.start(0);
   duo.submitLetter('p2', 'B', 100);
-  assert.equal(duo.getPlayer('p2').penaltySeconds, 2);
+  assert.equal(duo.getPlayer('p2').mistakes, 1);
   duo.submitLetter('p1', 'A', 1000);
+  duo.updateTime(10000);
   assert.equal(duo.status, 'finished');
-  assert.equal(duo.submitLetter('p2', 'A', 2000).accepted, false);
-  assert.equal(duo.getResults(2000).winner.id, 'p1');
-  assert.equal(duo.getResults(2000).elapsedSeconds, 1);
+  assert.equal(duo.submitLetter('p2', 'A', 10001).accepted, false);
+  assert.equal(duo.getResults().winner.id, 'p1');
+  assert.equal(duo.getResults().elapsedSeconds, 10);
 });

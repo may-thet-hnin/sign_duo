@@ -1,7 +1,7 @@
 import { WORD_SIGNS } from '../recognition/config.js';
 
 export function raceFeedback(player, result) {
-  if (player.finished) return 'Sequence completed!';
+  if (player.finished) return 'Out of hearts.';
   if (!result) return 'Show your hand to the camera.';
   if (result.status === 'error') return `Recognition unavailable: ${result.error}`;
   if (result.status === 'loading') return 'Loading letter recognition…';

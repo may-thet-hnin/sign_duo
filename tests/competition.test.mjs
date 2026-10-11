@@ -26,8 +26,9 @@ function stableFrames(smoother, letter, from) {
   for (let now = from; now <= from + 1000; now += 100) result = smoother.update(letter, now);
   return result;
 }
-function start(mode = 'single', sequence = ['A','B','L']) {
-  const engine = new RaceEngine({ mode, targetLetters: sequence });
+// A two-sign pool alternates (repeats are avoided); random=0 makes it start with the first sign.
+function start(mode = 'single', pool = ['A','B','L']) {
+  const engine = new RaceEngine({ mode, pool, random: () => 0 });
   engine.addPlayer('p1'); if (mode === 'versus') engine.addPlayer('p2');
   engine.start(0); return engine;
 }
@@ -72,8 +73,8 @@ test('A to A needs release, and camera stalls never re-arm a held identical sign
   assert.equal(events, 2);
 });
 
-test('A/A/B loop advances independently with fresh challenge events', () => {
-  const engine = start('single', ['A','A','B']);
+test('a one-sign pool repeats A, and each repeat needs a release and a fresh event', () => {
+  const engine = start('single', ['A']);
   const smoother = new TemporalSmoother();
   let number = 0;
   function feed(letter, now) {
@@ -85,14 +86,14 @@ test('A/A/B loop advances independently with fresh challenge events', () => {
   assert.equal(engine.getPlayer('p1').progress, 1);
   for (let now = 2000; now <= 2400; now += 100) feed(null, now);
   for (let now = 2500; now <= 3500; now += 100) feed('A', now);
-  assert.equal(engine.getCurrentTarget('p1'), 'B');
-  for (let now = 3600; now <= 4600; now += 100) feed('B', now);
-  assert.equal(engine.status, 'finished'); assert.equal(engine.getPlayer('p1').correct, 3);
+  assert.equal(engine.getPlayer('p1').progress, 2);
+  assert.equal(engine.getCurrentTarget('p1'), 'A');
+  assert.equal(engine.status, 'running', 'rounds never run out of signs');
 });
 
 test('incorrect sign never advances and duplicate wrong results do not drain hearts', () => {
   const engine = start('single', ['B','L']);
-  const wrong = event(engine, 'p1', 'A', 'wrong');
+  const wrong = event(engine, 'p1', 'L', 'wrong');
   assert.equal(engine.submitRecognition('p1', wrong, 900).correct, false);
   assert.equal(engine.submitRecognition('p1', wrong, 1000).accepted, false);
   assert.equal(engine.getPlayer('p1').progress, 0); assert.equal(engine.getPlayer('p1').hearts, 4);
@@ -114,7 +115,7 @@ test('duo events are scoped to one player and one challenge', () => {
   engine.submitRecognition('p1', p1, 900);
   assert.equal(engine.getPlayer('p1').progress, 1); assert.equal(engine.getPlayer('p2').progress, 0);
   engine.submitRecognition('p2', event(engine,'p2','B','two'), 1000);
-  assert.equal(engine.getPlayer('p2').penaltySeconds, 2); assert.equal(engine.getPlayer('p1').penaltySeconds, 0);
+  assert.equal(engine.getPlayer('p2').mistakes, 1); assert.equal(engine.getPlayer('p1').mistakes, 0);
 });
 
 test('a previous race event cannot be replayed after rematch', () => {

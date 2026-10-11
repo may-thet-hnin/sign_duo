@@ -4,23 +4,16 @@ import PixelSprite from "./Pixel.jsx";
  * ResultsScreen: shows the winner and a head-to-head stats comparison.
  *
  * Props
- * - players:   [{ id, name, score, lives, maxLives, progress,
- *                 correct, attempts, bestStreak, timeSeconds }, ...]  (exactly two)
+ * - players:   [{ id, name, score, lives, maxLives,
+ *                 correct, attempts, bestStreak, spm, skipped }, ...]  (exactly two)
  * - winnerId:  optional. Overrides the automatic winner; null is an explicit tie.
- * - winReason: optional. "finished_first" | "more_correct" | "fewer_mistakes" (from RaceEngine).
+ * - winReason: optional. "more_points" | "fewer_mistakes" (from RaceEngine).
  * - onRematch: called when "Play again" is pressed
  * - onHome:    called when "Back to menu" is pressed (button hidden if omitted)
  */
 
 function Trophy() {
   return <PixelSprite name="trophy" scale={7} className="rs__trophy" />;
-}
-
-function formatTime(sec) {
-  if (sec == null) return "–";
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function accuracy(p) {
@@ -31,13 +24,11 @@ function accuracy(p) {
 function pickWinner(a, b, winnerId) {
   if (winnerId !== undefined) return a.id === winnerId ? a : b.id === winnerId ? b : null;
   if (a.score !== b.score) return a.score > b.score ? a : b;
-  if (a.progress !== b.progress) return a.progress > b.progress ? a : b;
   return null; // tie
 }
 
 const WIN_REASONS = {
-  finished_first: "First to finish the sequence",
-  more_correct: "More correct signs when time ran out",
+  more_points: "Highest score when time ran out",
   fewer_mistakes: "Same correct signs, fewer mistakes",
 };
 
@@ -54,8 +45,8 @@ export default function ResultsScreen({ players, winnerId, winReason, onRematch,
     { label: "Correct signs", get: (p) => p.correct, show: (p) => `${p.correct} / ${p.attempts}`, higher: true },
     { label: "Best streak", get: (p) => p.bestStreak, show: (p) => p.bestStreak, higher: true },
     { label: "Hearts left", get: (p) => p.lives, show: (p) => `${p.lives} / ${p.maxLives}`, higher: true },
-    { label: "Progress", get: (p) => p.progress, show: (p) => `${Math.round(p.progress)}%`, higher: true, bar: true },
-    { label: "Time", get: (p) => p.timeSeconds, show: (p) => formatTime(p.timeSeconds), higher: false },
+    { label: "Signs per minute", get: (p) => p.spm, show: (p) => p.spm, higher: true },
+    { label: "Skipped", get: (p) => p.skipped, show: (p) => p.skipped, higher: false },
   ];
 
   // Hearts only exist in solo-style play; hide the row when neither player has any.
@@ -77,7 +68,7 @@ export default function ResultsScreen({ players, winnerId, winReason, onRematch,
         <h1 className="rs__title">{winner ? winner.name : "It's a tie!"}</h1>
         <p className="rs__sub">
           {winner
-            ? WIN_REASONS[winReason] ?? (margin > 0 ? `Won by ${margin.toLocaleString()} points` : "Won on progress")
+            ? WIN_REASONS[winReason] ?? `Won by ${margin.toLocaleString()} point${margin === 1 ? '' : 's'}`
             : "Same correct signs and mistakes"}
         </p>
       </section>
@@ -106,11 +97,6 @@ export default function ResultsScreen({ players, winnerId, winReason, onRematch,
                 ].map(([p, other]) => (
                   <td key={p.id} className={`rs__p--${p.id}`} data-best={isBest(row, p, other)}>
                     {row.show(p)}
-                    {row.bar && (
-                      <div className="rs__bar sd-bar" aria-hidden="true">
-                        <div className="sd-bar__fill" style={{ "--pct": `${Math.min(100, p.progress)}%` }} />
-                      </div>
-                    )}
                   </td>
                 ))}
               </tr>

@@ -316,7 +316,6 @@
 .rs__table td.rs__p--p1, .rs__table td.rs__p--p2 { color: var(--text); }
 .rs__table td[data-best='true'] { color: var(--mint); }
 .rs__crown { display: block; width: fit-content; margin: 8px auto 0; padding: 4px 8px 3px; font-size: 9px; color: var(--ink); background: var(--gold); border: 2px solid var(--ink); border-radius: 6px; }
-.rs__bar { max-width: 110px; margin: 8px auto 0; height: 14px; padding: 2px; }
 .rs__table td.rs__p--p1 .sd-bar { --bar: var(--aqua); }
 .rs__table td.rs__p--p2 .sd-bar { --bar: var(--pink); }
 .rs__actions { display: grid; gap: 16px; }
@@ -370,6 +369,10 @@
 .sd-race .sd-feedback::before { left: 11px; top: 13px; width: 7px; height: 10px; }
 .sd-hold-progress { height: 5px; background: rgba(19,11,58,.5); border-radius: 4px; overflow: hidden; }
 .sd-hold-progress span { display: block; height: 100%; background: var(--player); transition: width .1s; }
+/* Skip control: a small Skip key, right-aligned under the hold bar. */
+.sd-skip { display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 13px; color: var(--text-soft); }
+.sd-skip .sd-button { flex: none; }
+.sd-letters .skipped { opacity: .5; text-decoration: line-through; }
 .sd-attempt { font-size: 14px; min-height: 20px; color: var(--text-soft); }
 .sd-attempt[data-correct='true'] { color: var(--mint); animation: sd-accepted .35s ease-out; }
 .sd-attempt[data-correct='false'] { color: #ffb3c0; }

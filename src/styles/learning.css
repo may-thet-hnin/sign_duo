@@ -42,6 +42,21 @@
 .learn-feedback[data-success='true'] { border-color: var(--mint); color: var(--mint); }
 .learn-success { border-color: var(--mint); box-shadow: 0 0 0 2px var(--mint), 0 20px 40px rgba(19,11,58,.5); }
 .learn-actions > button { flex: 1 1 170px; min-height: 52px; }
+/* Restart | Continue: two equal halves of the lesson card's action row. */
+.learn-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.learn-split .sd-button { padding-inline: 10px; text-align: center; }
+.learn-test-button { width: 100%; }
+/* Understanding test: coach panel, review list and ghost toggle. */
+.learn-coach { display: grid; gap: 10px; padding: 16px; border: 1px solid rgba(255,255,255,.3); border-radius: 12px; background: rgba(19, 11, 58, .45); }
+.learn-coach h3 { margin: 0; font-size: 17px; }
+.learn-coach p { margin: 0; }
+.learn-coach--correcting { border-color: #ffb3c0; box-shadow: 0 0 0 1px #ffb3c0; }
+.learn-coach--correcting h3 { color: #ffb3c0; }
+.learn-test-review { font-size: 16px; color: var(--text-soft); }
+.learn-test-review ul { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; text-align: left; }
+.learn-ghost-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.learn-ghost-toggle input { width: 18px; height: 18px; accent-color: var(--aqua); }
+.sd-letters .had-mistake { box-shadow: inset 0 -4px 0 #ffb3c0; }
 .learn-quiz { width: min(100%, 640px); margin-inline: auto; }
 .learn-quiz form { display: grid; gap: 22px; }
 .learn-options { margin: 0; padding: 0; border: 0; display: grid; gap: 12px; }

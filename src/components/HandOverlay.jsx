@@ -1,10 +1,38 @@
 import { useEffect, useRef } from 'react'
 import { HandLandmarker } from '@mediapipe/tasks-vision'
+import { ghostShape, placeGhost } from '../utils/ghostHands.js'
 
 const CONNECTIONS = HandLandmarker.HAND_CONNECTIONS
 
-function drawHand(ctx, landmarks, width, height) {
+// Translucent target handshape, drawn under the tracked hand.
+function drawGhost(ctx, sign, landmarks, handedness, width, height) {
+  const points = placeGhost(ghostShape(sign, performance.now()), landmarks, handedness, width, height)
+  if (!points) return
+  const line = Math.max(4, Math.round(width / 150))
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.setLineDash([line * 1.6, line * 1.2])
+  ctx.lineWidth = line
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)'
+  for (const { start, end } of CONNECTIONS) {
+    ctx.beginPath()
+    ctx.moveTo(points[start][0], points[start][1])
+    ctx.lineTo(points[end][0], points[end][1])
+    ctx.stroke()
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+  for (const i of [4, 8, 12, 16, 20]) {
+    ctx.beginPath()
+    ctx.arc(points[i][0], points[i][1], line * 1.1, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+function drawHand(ctx, landmarks, width, height, ghost = null, handedness = null) {
   ctx.clearRect(0, 0, width, height)
+  if (ghost) drawGhost(ctx, ghost, landmarks, handedness, width, height)
   if (!landmarks || landmarks.length === 0) {
     return
   }
@@ -45,13 +73,16 @@ function drawHand(ctx, landmarks, width, height) {
 }
 
 /**
- * Canvas overlay that draws 21 hand landmarks and their connections.
+ * Canvas overlay that draws 21 hand landmarks and their connections, and
+ * optionally a ghost of the `ghost` sign's handshape as a guide.
  * It is mirrored the same way as the webcam video so points stay aligned.
  * Drawing is imperative: the parent calls `drawRef.current(landmarks)` from the
  * tracking loop, so each video frame does not need a React render.
  */
-export default function HandOverlay({ videoRef, drawRef }) {
+export default function HandOverlay({ videoRef, drawRef, ghost = null }) {
   const canvasRef = useRef(null)
+  const ghostRef = useRef(ghost)
+  useEffect(() => { ghostRef.current = ghost }, [ghost])
 
   useEffect(() => {
     const video = videoRef.current
@@ -70,8 +101,8 @@ export default function HandOverlay({ videoRef, drawRef }) {
     }
 
     const ctx = canvas.getContext('2d')
-    drawRef.current = (landmarks) => {
-      if (ctx) drawHand(ctx, landmarks, canvas.width, canvas.height)
+    drawRef.current = (landmarks, handedness) => {
+      if (ctx) drawHand(ctx, landmarks, canvas.width, canvas.height, ghostRef.current, handedness)
     }
 
     syncSize()

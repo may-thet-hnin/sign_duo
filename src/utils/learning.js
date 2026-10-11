@@ -1,9 +1,12 @@
 import { SUPPORTED_SIGNS, STARTER_SIGNS } from '../recognition/config.js';
 import { COURSE_LESSONS } from './lessonContent.js';
+import { TEST_LENGTH } from './understandingTest.js';
 export const PROGRESS_KEY = 'sign-duo-learning-v1';
 export const emptyProgress = () => ({
   version: 1, position: 0, practiced: [], skipped: [], mastered: [], answers: [],
-  completed: false, completions: 0, successfulAttempts: 0,
+  completed: false, completions: 0, successfulAttempts: 0, attempted: false,
+  // Best "Test your understanding" result: signs right on the first try, or null.
+  testBest: null,
 });
 
 export function parseProgress(raw, lesson = COURSE_LESSONS[0]) {
@@ -33,10 +36,13 @@ export function parseProgress(raw, lesson = COURSE_LESSONS[0]) {
     const maxPosition = passed === lesson.signs.length ? lesson.practiceActivities + answers.length : passed * 2 + 1;
     const position = Number.isInteger(saved.position) ? Math.max(0, Math.min(saved.position, maxPosition, lesson.activityCount)) : 0;
     const completed = passed === lesson.signs.length && answers.length === lesson.quiz.length && position === lesson.activityCount;
+    const completions = Number.isInteger(saved.completions) ? Math.max(0, saved.completions) : 0;
     return {
-      ...emptyProgress(), practiced, skipped, answers, position, completed,
+      ...emptyProgress(), practiced, skipped, answers, position, completed, completions,
+      // Saves from before this flag existed count as attempted if they show any progress.
+      attempted: typeof saved.attempted === 'boolean' ? saved.attempted : position > 0 || completions > 0 || passed > 0,
+      testBest: Number.isInteger(saved.testBest) && saved.testBest >= 0 && saved.testBest <= TEST_LENGTH ? saved.testBest : null,
       mastered: SUPPORTED_SIGNS.learning.filter(letter => practiced.includes(letter) || (Array.isArray(saved.mastered) && saved.mastered.includes(letter))),
-      completions: Number.isInteger(saved.completions) ? Math.max(0, saved.completions) : 0,
       successfulAttempts: Number.isInteger(saved.successfulAttempts) ? Math.max(practiced.length, saved.successfulAttempts) : practiced.length,
     };
   } catch { return emptyProgress(); }
@@ -72,8 +78,20 @@ export function advanceProgress(progress, lesson = COURSE_LESSONS[0]) {
     completions: progress.completions + Number(position === lesson.activityCount) };
 }
 
+// Restart: back to the first activity, keeping lifetime stats and the attempted flag.
 export function replayProgress(progress) {
-  return { ...emptyProgress(), mastered: progress.mastered, completions: progress.completions, successfulAttempts: progress.successfulAttempts };
+  return { ...emptyProgress(), mastered: progress.mastered, completions: progress.completions,
+    successfulAttempts: progress.successfulAttempts, attempted: true, testBest: progress.testBest };
+}
+
+// Keep the best understanding-test score; taking a test also counts as attempting the lesson.
+export function recordTestResult(progress, score) {
+  const testBest = Math.max(progress.testBest ?? 0, score);
+  return progress.attempted && progress.testBest === testBest ? progress : { ...progress, attempted: true, testBest };
+}
+
+export function markAttempted(progress) {
+  return progress.attempted ? progress : { ...progress, attempted: true };
 }
 
 export const COURSE_PROGRESS_KEY = 'sign-duo-learning-v2';

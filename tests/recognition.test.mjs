@@ -73,10 +73,10 @@ test('time-based confirmation, no-hand reset, unknown, release and stale frames'
 test('competition generation and submissions enforce approved letters in both modes', () => {
   for (const mode of ['single', 'versus']) {
     const race = new RaceEngine({ mode });
-    assert.ok(race.targetLetters.every(c => SUPPORTED_SIGNS.competition.includes(c)));
+    assert.ok(Array.from({ length: 50 }, (_, i) => race.signAt(i)).every(c => SUPPORTED_SIGNS.competition.includes(c)));
     race.addPlayer('p1'); if (mode === 'versus') race.addPlayer('p2'); race.start(0);
     for (const c of ['THANK YOU','J','Z','G','0']) {
-      assert.throws(() => new RaceEngine({ mode, targetLetters: [c] }));
+      assert.throws(() => new RaceEngine({ mode, pool: [c] }));
       assert.equal(race.submitLetter('p1', c, 100).accepted, false);
     }
     assert.equal(race.getPlayer('p1').mistakes, 0);

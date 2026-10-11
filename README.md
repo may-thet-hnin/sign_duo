@@ -31,7 +31,8 @@ Six lessons teach small groups of signs: A/B/L, C/D/I, V/W/Y, E/S/M/N, O/F/R, an
 Each includes guided references, camera practice, and knowledge checks. Static
 letters require about 900 ms of matching predictions plus sample/agreement
 validation; words use motion milestones instead of a stationary hold. Each lesson
-saves its own progress in localStorage and can be resumed or replayed. Existing
+saves its own progress in localStorage. A lesson you have opened shows Restart lesson
+and Continue; one you have never opened shows Start lesson. Existing
 A/B/L checkpoints migrate into Lesson 1.
 
 Run `npm run dev`, then choose **Start learning**. Run `npm test`, `npm run lint`,
@@ -49,7 +50,14 @@ for root causes, changed files, validation and remaining webcam checks, and
 ## Competition
 
 Choose 30/60/90/120 seconds before starting (default 60). The countdown begins after
-all cameras and recognition models are ready. Different letters transition naturally;
-repeated identical letters require a brief release. See [competition fixes and browser
+all cameras and recognition models are ready. Each race draws a new random sequence
+from the chosen pool (Alphabet, Basic Words or Mixed) and keeps adding signs until
+the timer reaches zero. A sign never repeats within the last few targets. E, M and N
+are left out of races for now. Each correct sign scores 1 point. Each player can skip up
+to 3 signs per race with their Skip button (0 points, no penalty); skips never pause
+the main timer. In Duo, both players get the same sequence and
+advance (and skip) independently; the higher score at zero wins, then fewer mistakes,
+otherwise it is a tie. Solo keeps five hearts, and losing
+the last heart ends the run early. See [competition fixes and browser
 checklist](docs/competition-fixes.md) for the B compatibility path and validation limits.
 

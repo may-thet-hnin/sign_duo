@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { DynamicGestureRecognizer } from '../src/recognition/dynamicGestures.js';
 import { RecognitionController } from '../src/recognition/controller.js';
 import { RaceEngine } from '../src/utils/raceEngine.js';
-import { ALPHABET_SIGNS, WORD_SIGNS, CHALLENGE_SEQUENCES } from '../src/recognition/config.js';
+import { ALPHABET_SIGNS, WORD_SIGNS, COMPETITION_POOLS } from '../src/recognition/config.js';
 import { ALPHABET_LESSONS, WORD_LESSONS, signContent } from '../src/utils/lessonContent.js';
 import { pose, cameraPoints, wordFrames } from './fixtures/signs.mjs';
 
@@ -115,10 +115,10 @@ test('mixed challenges re-arm static letters after a word and discard partial mo
   c.dispose();
 });
 
-test('solo and duo consume temporal events with independent cameras and frozen first-completion wins', async () => {
+test('solo and duo consume temporal events with independent cameras until time runs out', async () => {
   for (const mode of ['single','versus']) {
     let now = 0;
-    const engine = new RaceEngine({ mode, targetLetters: ['YES','NO'], clock: () => now });
+    const engine = new RaceEngine({ mode, pool: ['YES','NO'], random: () => 0, durationSeconds: 5, clock: () => now });
     engine.addPlayer('p1'); if (mode === 'versus') engine.addPlayer('p2'); engine.start();
     const controllers = new Map([...engine.players.keys()].map(id => {
       const c = new RecognitionController({ infer: async () => { throw new Error('Words must not run static inference'); }, clock: () => now,
@@ -134,6 +134,10 @@ test('solo and duo consume temporal events with independent cameras and frozen f
     if (mode === 'versus') assert.equal(engine.getPlayer('p2').progress, 0);
     const c = controllers.get('p1'); c.setChallenge(engine.getChallengeId('p1')); c.setTarget('NO');
     for (const f of wordFrames('NO')) { now = 1500 + f.now; await c.process(f.points, now); }
+    assert.equal(engine.getPlayer('p1').progress, 2);
+    assert.equal(engine.getCurrentTarget('p1'), 'YES', 'new signs keep coming');
+    assert.equal(engine.status, 'running');
+    now = 5000; engine.updateTime();
     assert.equal(engine.status, 'finished');
     assert.equal(engine.getResults().winnerId, mode === 'versus' ? 'p1' : null);
     const final = engine.getResults();
@@ -149,6 +153,6 @@ test('every offered sign has content and race challenges', () => {
   assert.deepEqual(WORD_LESSONS.map(s => s.letter), WORD_SIGNS);
   assert.equal(WORD_LESSONS[0].simplified, true);
   for (const sign of [...ALPHABET_SIGNS, ...WORD_SIGNS]) assert.equal(signContent(sign)?.letter, sign);
-  for (const sequence of Object.values(CHALLENGE_SEQUENCES)) assert.doesNotThrow(() => new RaceEngine({ targetLetters: sequence }));
-  assert.deepEqual(new Set(CHALLENGE_SEQUENCES.alphabet), new Set(ALPHABET_SIGNS));
+  for (const pool of Object.values(COMPETITION_POOLS)) assert.doesNotThrow(() => new RaceEngine({ pool }));
+  assert.deepEqual(COMPETITION_POOLS.alphabet, ALPHABET_SIGNS.filter(s => !['E','M','N'].includes(s)));
 });

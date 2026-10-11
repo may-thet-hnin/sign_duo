@@ -78,7 +78,7 @@ export function recordPractice(progress, letter, lesson = COURSE_LESSONS[0]) {
   const expected = lesson.signs[Math.floor(progress.position / 2)];
   if (progress.position >= lesson.practiceActivities || progress.position % 2 !== 1 || letter !== expected || progress.practiced.includes(letter)) return progress;
   return { ...progress, practiced: [...progress.practiced, letter],
-    mastered: [...new Set([...progress.mastered, letter])], successfulAttempts: progress.successfulAttempts + 1 };
+    mastered: SUPPORTED_SIGNS.learning.filter(sign => progress.mastered.includes(sign) || sign === letter), successfulAttempts: progress.successfulAttempts + 1 };
 }
 
 export function recordAnswer(progress, answer, lesson = COURSE_LESSONS[0]) {

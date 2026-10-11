@@ -85,7 +85,7 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
     }
     const now = performance.now();
     if (feedbackCandidate.current.text !== text) feedbackCandidate.current = { text, since: now };
-    if (next.status === 'error' || next.status === 'loading' || now - feedbackCandidate.current.since >= 200) setFeedback(text);
+    if (next.kind === 'dynamic' || next.status === 'error' || next.status === 'loading' || now - feedbackCandidate.current.since >= 200) setFeedback(text);
   }
 
   function tryAgain() {

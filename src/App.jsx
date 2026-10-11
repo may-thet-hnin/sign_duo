@@ -172,7 +172,7 @@ export default function App() {
           <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>Choose your race duration. Five hearts.</p></article>
           <article className="sd-feature glass"><PixelSprite name="bolt" scale={5} /><h3>Duo</h3><p>Two webcams, one shared sequence, real-time competition.</p></article>
         </div>
-        <p className="sd-hint">Practice nine letters and three basic word motions. Hold letters steadily; complete the movement for words. HELLO uses simplified motion practice.</p>
+        <p className="sd-hint">Practice all 26 letters and three basic word motions. Hold static letters steadily; complete the movement for J, Z, and words. HELLO uses simplified motion practice.</p>
       </section>}
 
       {screen === 'learn' && <section className="sd-learn">

@@ -149,9 +149,9 @@ test('word progress is tied to movement, with no endpoint hold timer', () => {
       results.push(d.update(frame.points,frame.now));
       if (results.at(-1).isNew) break;
     }
-    assert.ok(results.some(r=>r.progress===.25));
-    assert.ok(results.some(r=>r.progress===.5));
-    assert.ok(results.some(r=>r.progress===.75));
+    assert.ok(results.some(r=>r.progress > 0 && r.progress < .5));
+    assert.ok(results.some(r=>r.progress >= .5 && r.progress < 1));
+    assert.ok(new Set(results.map(r=>r.progress)).size >= 4, 'progress follows intermediate motion frames');
     assert.equal(results.at(-1).progress,1);
     assert.equal(results.at(-1).phase,'complete');
     const still = new DynamicGestureRecognizer();

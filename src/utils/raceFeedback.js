@@ -1,4 +1,4 @@
-import { WORD_SIGNS } from '../recognition/config.js';
+import { WORD_SIGNS, MOTION_LETTERS } from '../recognition/config.js';
 
 export function raceFeedback(player, result) {
   if (player.finished) return 'Sequence completed!';
@@ -14,6 +14,6 @@ export function raceFeedback(player, result) {
   if (result.lockedLetter === player.currentTarget && !result.isNew) return player.currentTarget === 'NO'
     ? 'Reopen both fingers and pause, then close them toward the thumb again.'
     : 'Release your hand briefly, then sign again.';
-  if (WORD_SIGNS.includes(player.currentTarget)) return `${result.phase || 'Start'} · Complete the ${player.currentTarget} movement.`;
+  if (WORD_SIGNS.includes(player.currentTarget) || MOTION_LETTERS.includes(player.currentTarget)) return `${result.phase || 'Start'} · Complete the ${player.currentTarget} movement.`;
   return `Hold ${detected} steady…`;
 }

@@ -40,7 +40,7 @@ test('official mapping, numerically stable softmax, confidence and full-class fi
   assert.deepEqual(softmax([10000, 10000]), [.5, .5]);
   assert.throws(() => softmax([NaN]));
   assert.equal(decodePrediction(logits('L'), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning).letter, 'L');
-  for (const c of ['J','Z','F','0']) {
+  for (const c of ['0','1','9']) {
     const result = decodePrediction(logits(c), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning);
     assert.equal(result.raw, c); assert.equal(result.letter, null);
   }
@@ -67,7 +67,7 @@ test('competition generation and submissions enforce approved letters in both mo
     const race = new RaceEngine({ mode });
     assert.ok(race.targetLetters.every(c => SUPPORTED_SIGNS.competition.includes(c)));
     race.addPlayer('p1'); if (mode === 'versus') race.addPlayer('p2'); race.start(0);
-    for (const c of ['THANK YOU','J','Z','F','0']) {
+    for (const c of ['THANK YOU','0']) {
       assert.throws(() => new RaceEngine({ mode, targetLetters: [c] }));
       assert.equal(race.submitLetter('p1', c, 100).accepted, false);
     }

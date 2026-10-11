@@ -117,3 +117,50 @@ export function isFingerExtended(landmarks, finger) {
   // Extension: tip is clearly further from the base joint than the intermediate joint.
   return getDistance(tip, base) > getDistance(middle, base) * 1.35;
 }
+
+// Motion changes viewing angle and foreshortens fingers. Use joint bend plus
+// relative reach rather than requiring the stricter static-letter thresholds.
+export function motionHandFeatures(points) {
+  const f = handFeatures(points);
+  if (!f) return null;
+  for (const finger of Object.values(f.fingers)) {
+    finger.motionExtended = finger.angle > 135 && finger.distalAngle > 125 && finger.straightness > .75;
+    finger.motionFolded = !finger.motionExtended && (finger.angle < 145 || finger.straightness < .7);
+  }
+  return f;
+}
+
+// E has curled fingers with their tips beneath the PIP row, and the thumb
+// underneath the fingertips. Project onto the palm axis to allow hand rotation.
+export function recognizeEGeometry(points) {
+  const f = handFeatures(points);
+  if (!f) return false;
+  const bases = [5, 9, 13, 17];
+  const center = { x: f.knuckleX, y: f.knuckleY, z: f.knuckleZ };
+  const axis = ['x', 'y', 'z'].map(k => center[k] - (points[0][k] ?? 0));
+  const length = Math.hypot(...axis);
+  if (length < 1e-5) return false;
+  const along = (a, b) => ['x', 'y', 'z'].reduce((sum, k, n) =>
+    sum + ((points[a][k] ?? 0) - (points[b][k] ?? 0)) * axis[n] / length, 0) / f.width;
+  const curled = Object.values(f.fingers).every(v => !v.extended && v.angle < 155 && v.reach < .8);
+  // A/S fists have tips near the MCP row. E leaves a raised row of bent tips.
+  const raisedTips = bases.every(base => along(base + 3, base) > .16 &&
+    along(base + 1, base + 3) > .12);
+  const thumbUnder = along(4, 8) < .08 && along(4, 12) < .08;
+  return curled && raisedTips && thumbUnder && f.distance(4, 12) < 1.05 &&
+    f.distance(8, 12) < .65 && f.distance(12, 16) < .65 && f.distance(16, 20) < .65;
+}
+
+// F: thumb/index contact with the other three fingers raised. The index can
+// make a rounded circle instead of a tight fold; don't require a closed fist.
+export function recognizeFGeometry(points) {
+  const f = handFeatures(points);
+  if (!f) return false;
+  const { index, middle, ring, pinky } = f.fingers;
+  const raised = [middle, ring, pinky].every(finger =>
+    finger.angle > 145 && finger.distalAngle > 135 && finger.straightness > .8 && finger.reach > .65);
+  const curledIndex = !index.extended && index.straightness < .85 &&
+    (index.angle < 150 || index.distalAngle < 140);
+  return raised && curledIndex && f.distance(4, 8) < .35 &&
+    f.distance(8, 12) > .5 && f.distance(4, 12) > .5;
+}

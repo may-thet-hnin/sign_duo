@@ -15,34 +15,11 @@ export function getDistance(a, b) {
 // Geometric heuristic, not a validated ASL fingerspelling model.
 export function isFingerExtended(landmarks, finger) {
   const indices = FINGER_INDICES[finger];
-
-  if (
-    !indices ||
-    !Array.isArray(landmarks) ||
-    landmarks.length < 21
-  ) {
-    return false;
-  }
-
+  if (!indices || !Array.isArray(landmarks) || landmarks.length < 21) return false;
+  const joint = finger === 'thumb' ? indices.ip : indices.pip;
   const tip = landmarks[indices.tip];
+  const middle = landmarks[joint];
   const base = landmarks[indices.mcp];
-
-  // For the thumb, compare the tip to its IP joint.
-  // For other fingers, compare the tip to the PIP joint.
-  const jointIndex = finger === 'thumb' ? indices.ip : indices.pip;
-  const joint = landmarks[jointIndex];
-
-  const tipToBase = getDistance(tip, base);
-  const jointToBase = getDistance(joint, base);
-
-  if (
-    !Number.isFinite(tipToBase) ||
-    !Number.isFinite(jointToBase) ||
-    jointToBase < 0.00001
-  ) {
-    return false;
-  }
-
-  // Previously 1.35. A lower ratio accepts slightly bent fingers.
-  return tipToBase > jointToBase * 1.20;
+  // Extension: tip is clearly further from the base joint than the intermediate joint.
+  return getDistance(tip, base) > getDistance(middle, base) * 1.35;
 }

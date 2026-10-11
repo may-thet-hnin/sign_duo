@@ -1,6 +1,6 @@
 .sd-learn { max-width: 1100px; }
 .learning { --player: var(--aqua); display: grid; gap: 26px; }
-.learn-heading { font-size: clamp(16px, 2.5vw, 23px); line-height: 1.6; }
+.learn-heading { font-size: clamp(16px, 2.5vw, 23px); line-height: 1.6; scroll-margin-top: 16px; }
 .learn-heading:focus { outline: none; }
 .learn-intro { max-width: 72ch; font-size: 21px; color: var(--text-soft); }
 .learn-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 24px; gap: 20px; }
@@ -36,10 +36,27 @@
 .learn-readouts strong { color: var(--gold); }
 .learn-camera .sd-camera__frame { aspect-ratio: 16 / 9; }
 .learn-camera .sd-camera__video, .learn-camera .sd-hand-overlay { object-fit: contain; }
-.learn-feedback { min-height: 76px; display: flex; align-items: center; padding: 16px; background: rgba(19, 11, 58, .7); border: 1px solid rgba(255,255,255,.35); border-radius: 12px; font-size: 20px; }
+/* Room for two lines, so live messages of different lengths do not move the buttons below. */
+.learn-feedback { min-height: calc(3em + 34px); line-height: 1.5; display: flex; align-items: center; padding: 16px; background: rgba(19, 11, 58, .7); border: 1px solid rgba(255,255,255,.35); border-radius: 12px; font-size: 20px; }
+@media (max-width: 560px) { .learn-feedback { min-height: calc(4.5em + 34px); } }
 .learn-feedback[data-success='true'] { border-color: var(--mint); color: var(--mint); }
 .learn-success { border-color: var(--mint); box-shadow: 0 0 0 2px var(--mint), 0 20px 40px rgba(19,11,58,.5); }
 .learn-actions > button { flex: 1 1 170px; min-height: 52px; }
+/* Restart | Continue: two equal halves of the lesson card's action row. */
+.learn-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.learn-split .sd-button { padding-inline: 10px; text-align: center; }
+.learn-test-button { width: 100%; }
+/* Understanding test: coach panel, review list and ghost toggle. */
+.learn-coach { display: grid; gap: 10px; padding: 16px; border: 1px solid rgba(255,255,255,.3); border-radius: 12px; background: rgba(19, 11, 58, .45); }
+.learn-coach h3 { margin: 0; font-size: 17px; }
+.learn-coach p { margin: 0; }
+.learn-coach--correcting { border-color: #ffb3c0; box-shadow: 0 0 0 1px #ffb3c0; }
+.learn-coach--correcting h3 { color: #ffb3c0; }
+.learn-test-review { font-size: 16px; color: var(--text-soft); }
+.learn-test-review ul { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; text-align: left; }
+.learn-ghost-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.learn-ghost-toggle input { width: 18px; height: 18px; accent-color: var(--aqua); }
+.sd-letters .had-mistake { box-shadow: inset 0 -4px 0 #ffb3c0; }
 .learn-quiz { width: min(100%, 640px); margin-inline: auto; }
 .learn-quiz form { display: grid; gap: 22px; }
 .learn-options { margin: 0; padding: 0; border: 0; display: grid; gap: 12px; }
@@ -51,9 +68,16 @@
 .learn-option[data-state='right'] { border-color: var(--mint); background: #174336; }
 .learn-option[data-state='wrong'] { border-color: var(--danger); background: #552337; }
 .learn-option__mark { font-size: 15px; color: var(--mint); }
+.learn-option--word { grid-template-columns: 20px 88px minmax(0, 1fr) auto; }
+.learn-option--word .hl__key { width: 88px; font-size: 10px; }
 .learn-complete { max-width: 720px; width: 100%; margin-inline: auto; justify-items: center; text-align: center; }
 .learn-score { font-size: 25px; color: var(--gold); }
 .learn-complete .learn-actions { width: 100%; }
+.learn-category { display: grid; gap: 20px; }
+.learn-motion { overflow: hidden; gap: 12px; }
+.learn-motion .learn-motion__hand { position: static; background: none; padding: 0; font-size: 72px; animation: learn-sweep 2.4s ease-in-out infinite; }
+@keyframes learn-sweep { 0%, 20% { transform: translateX(-35px); } 60%, 100% { transform: translateX(35px); } }
+@media (prefers-reduced-motion: reduce) { .learn-motion .learn-motion__hand { animation: none; } }
 @media (max-width: 760px) {
   .learn-guided, .learn-practice, .learn-lesson-grid { grid-template-columns: minmax(0, 1fr); }
   .learn-journey { align-items: stretch; flex-direction: column; gap: 16px; }
@@ -65,4 +89,6 @@
 @media (max-width: 400px) {
   .learn-option { gap: 10px; grid-template-columns: 18px 42px minmax(0, 1fr); }
   .learn-option__mark { grid-column: 3; }
+  .learn-option--word { grid-template-columns: 18px 72px minmax(0, 1fr); }
+  .learn-option--word .hl__key { width: 72px; font-size: 9px; }
 }

@@ -5,10 +5,10 @@ import { RaceEngine } from '../src/utils/raceEngine.js';
 import { raceFeedback } from '../src/utils/raceFeedback.js';
 import { TemporalSmoother } from '../src/recognition/temporalSmoothing.js';
 import { RecognitionController } from '../src/recognition/controller.js';
-import { recognizeBGeometry } from '../src/recognition/bGeometry.js';
 import { RACE_DURATIONS } from '../src/recognition/config.js';
 
 const classes = JSON.parse(await readFile(new URL('../public/models/asl/mlp_classes.json', import.meta.url)));
+const { samples } = JSON.parse(await readFile(new URL('./fixtures/referenceLandmarks.json', import.meta.url)));
 // Synthetic articulated geometry tests mechanics, not measured webcam accuracy.
 function bFixture() {
   const points = Array.from({ length: 21 }, () => ({ x: .5, y: .7, z: 0 }));
@@ -26,8 +26,9 @@ function stableFrames(smoother, letter, from) {
   for (let now = from; now <= from + 1000; now += 100) result = smoother.update(letter, now);
   return result;
 }
-function start(mode = 'single', sequence = ['A','B','L']) {
-  const engine = new RaceEngine({ mode, targetLetters: sequence });
+// A two-sign pool alternates (repeats are avoided); random=0 makes it start with the first sign.
+function start(mode = 'single', pool = ['A','B','L']) {
+  const engine = new RaceEngine({ mode, pool, random: () => 0 });
   engine.addPlayer('p1'); if (mode === 'versus') engine.addPlayer('p2');
   engine.start(0); return engine;
 }
@@ -72,8 +73,8 @@ test('A to A needs release, and camera stalls never re-arm a held identical sign
   assert.equal(events, 2);
 });
 
-test('A/A/B loop advances independently with fresh challenge events', () => {
-  const engine = start('single', ['A','A','B']);
+test('a one-sign pool repeats A, and each repeat needs a release and a fresh event', () => {
+  const engine = start('single', ['A']);
   const smoother = new TemporalSmoother();
   let number = 0;
   function feed(letter, now) {
@@ -85,14 +86,14 @@ test('A/A/B loop advances independently with fresh challenge events', () => {
   assert.equal(engine.getPlayer('p1').progress, 1);
   for (let now = 2000; now <= 2400; now += 100) feed(null, now);
   for (let now = 2500; now <= 3500; now += 100) feed('A', now);
-  assert.equal(engine.getCurrentTarget('p1'), 'B');
-  for (let now = 3600; now <= 4600; now += 100) feed('B', now);
-  assert.equal(engine.status, 'finished'); assert.equal(engine.getPlayer('p1').correct, 3);
+  assert.equal(engine.getPlayer('p1').progress, 2);
+  assert.equal(engine.getCurrentTarget('p1'), 'A');
+  assert.equal(engine.status, 'running', 'rounds never run out of signs');
 });
 
 test('incorrect sign never advances and duplicate wrong results do not drain hearts', () => {
   const engine = start('single', ['B','L']);
-  const wrong = event(engine, 'p1', 'A', 'wrong');
+  const wrong = event(engine, 'p1', 'L', 'wrong');
   assert.equal(engine.submitRecognition('p1', wrong, 900).correct, false);
   assert.equal(engine.submitRecognition('p1', wrong, 1000).accepted, false);
   assert.equal(engine.getPlayer('p1').progress, 0); assert.equal(engine.getPlayer('p1').hearts, 4);
@@ -114,7 +115,7 @@ test('duo events are scoped to one player and one challenge', () => {
   engine.submitRecognition('p1', p1, 900);
   assert.equal(engine.getPlayer('p1').progress, 1); assert.equal(engine.getPlayer('p2').progress, 0);
   engine.submitRecognition('p2', event(engine,'p2','B','two'), 1000);
-  assert.equal(engine.getPlayer('p2').penaltySeconds, 2); assert.equal(engine.getPlayer('p1').penaltySeconds, 0);
+  assert.equal(engine.getPlayer('p2').mistakes, 1); assert.equal(engine.getPlayer('p1').mistakes, 0);
 });
 
 test('a previous race event cannot be replayed after rematch', () => {
@@ -139,41 +140,16 @@ test('all timer choices wait for start, use monotonic elapsed time and clamp at 
   }
 });
 
-test('B compatibility checks require all four extended fingers and folded thumb', () => {
-  const b = bFixture(); assert.equal(recognizeBGeometry(b), true);
-  for (const tip of [8,12,16,20]) {
-    const folded = b.map(p => ({ ...p })); folded[tip].y = folded[tip - 3].y;
-    assert.equal(recognizeBGeometry(folded), false);
-  }
-  const palm = b.map(p => ({ ...p })); palm[4].x = .15;
-  assert.equal(recognizeBGeometry(palm), false);
-  assert.equal(recognizeBGeometry(null), false);
-});
-
-test('B compatibility works alongside a different ONNX class without fabricated confidence', async () => {
-  const results = [];
-  const controller = new RecognitionController({ onResult: result => results.push(result), infer: async () => ({
-    logits: classes.map(c => c === '4' ? 20 : -20), classes, latencyMs: 1,
-  }) });
-  controller.setChallenge('p1:0');
-  const now = performance.now();
-  await controller.process(bFixture(), now);
-  assert.equal(results[0].candidate, 'B'); assert.equal(results[0].raw, '4');
-  assert.equal(results[0].status, 'tentative'); assert.equal(results[0].isNew, false);
-  assert.match(results[0].method, /geometry/); assert.equal(results[0].modelLetter, null);
-  controller.dispose();
-});
-
-test('real ONNX plus B geometry and time validation advances the race end to end', async () => {
+test('real ONNX on real B landmarks and time validation advance the race end to end', async () => {
   const ort = await import('onnxruntime-web');
-  const { normalizeLandmarks } = await import('../src/recognition/preprocessing.js');
   ort.env.wasm.numThreads = 1;
+  const reference = samples.find(s => s.letter === 'B' && s.handedness === 'Left');
+  const b = reference.points.map(([x, y, z]) => ({ x, y, z }));
   const session = await ort.InferenceSession.create(await readFile(new URL('../public/models/asl/mlp_asl.onnx', import.meta.url)), { executionProviders: ['wasm'] });
   let now = 0;
   const engine = start('single', ['B','L']);
   const controller = new RecognitionController({ clock: () => now,
     infer: async input => {
-      assert.deepEqual(input, normalizeLandmarks(bFixture()));
       const inferenceStart = performance.now();
       const output = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', input, [1,63]) });
       return { logits: output[session.outputNames[0]].data, classes, latencyMs: performance.now() - inferenceStart };
@@ -187,7 +163,7 @@ test('real ONNX plus B geometry and time validation advances the race end to end
   });
   controller.setChallenge(engine.getChallengeId('p1'));
   try {
-    for (now = 0; now <= 2000; now += 100) await controller.process(bFixture(), now);
+    for (now = 0; now <= 2000; now += 100) await controller.process(b, now, { handedness: reference.handedness });
     assert.equal(engine.getPlayer('p1').correct, 1);
     assert.equal(engine.getCurrentTarget('p1'), 'L');
   } finally { controller.dispose(); await session.release(); }
@@ -206,6 +182,21 @@ test('feedback explains tentative, wrong, repeated, absent and error states with
   assert.equal(raceFeedback(player, { status: 'no-hand' }), 'Show your hand to the camera.');
   assert.match(raceFeedback(player, { status: 'tentative', candidate: 'B' }), /Hold B/);
   assert.match(raceFeedback(player, { candidate: 'A' }), /Detected A/);
+  assert.equal(raceFeedback(player, { status: 'stable', letter: 'A', candidate: 'A', lockedLetter: 'A' }), 'You already got A. Now make B.');
   assert.match(raceFeedback(player, { status: 'stable', letter: 'B', lockedLetter: 'B' }), /Release/);
   assert.match(raceFeedback(player, { status: 'error', error: 'Failed' }), /Failed/);
+});
+
+test('holding an accepted sign through the success pause never counts again or against the next sign', async () => {
+  let now = 0; const results = [];
+  const c = new RecognitionController({ clock: () => now, infer: async () => ({ logits: classes.map(x => x === 'B' ? 20 : -20), classes, latencyMs: 1 }), onResult: r => results.push(r) });
+  c.setChallenge('p1:0');
+  for (now = 0; now <= 1000; now += 100) await c.process(bFixture(), now);
+  assert.deepEqual(results.filter(r => r.isNew).map(r => r.letter), ['B']);
+  // Next target, then 1.2 s with recognition paused (no frames), then the player still holds B.
+  c.setChallenge('p1:1');
+  for (now = 2300; now <= 5000; now += 100) await c.process(bFixture(), now);
+  assert.equal(results.filter(r => r.isNew).length, 1, 'the held B is neither re-scored nor a mistake');
+  assert.equal(results.at(-1).lockedLetter, 'B');
+  c.dispose();
 });

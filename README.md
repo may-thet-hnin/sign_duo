@@ -6,7 +6,7 @@ Sign Duo teaches users the letters of ASL and checks accuracy using computer vis
 - JavaScript/React
 - Node.js
 - [Google Media Pipe](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) for the computer vision
-- Local ONNX Runtime Web ASL landmark MLP, plus an experimental B geometry compatibility path. Only A/B/L are enabled.
+- Local ONNX Runtime Web ASL landmark MLP ([nocontextdoruk/asl-landmark-mlp](https://huggingface.co/nocontextdoruk/asl-landmark-mlp)) for 16 static letters (A B C D E F I L M N O R S V W Y), plus temporal hand-geometry motion practice for HELLO/YES/NO. HELLO is a labeled simplified motion exercise. See [the model audit](docs/model-audit.md) for why other letters are not offered.
 - [Camo App](https://camo.com/) for the second webcam (1v1 "signs per minute" contest)
 
 
@@ -27,10 +27,13 @@ Race scoring and the pixel/glass design are preserved.
 
 ## Learning Mode
 
-Lesson 1 teaches A, B, and L through guided instruction, photographic references,
-live camera practice, and three knowledge checks. Camera practice requires about
-900 ms of matching predictions plus sample/agreement validation. Progress is saved
-in this browser's localStorage; completed lessons can be replayed.
+Six lessons teach small groups of signs: A/B/L, C/D/I, V/W/Y, E/S/M/N, O/F/R, and HELLO/YES/NO.
+Each includes guided references, camera practice, and knowledge checks. Static
+letters require about 900 ms of matching predictions plus sample/agreement
+validation; words use motion milestones instead of a stationary hold. Each lesson
+saves its own progress in localStorage. A lesson you have opened shows Restart lesson
+and Continue; one you have never opened shows Start lesson. Existing
+A/B/L checkpoints migrate into Lesson 1.
 
 Run `npm run dev`, then choose **Start learning**. Run `npm test`, `npm run lint`,
 and `npm run build` for automated checks.
@@ -38,10 +41,23 @@ and `npm run build` for automated checks.
 See [Learning Mode implementation and testing report](docs/learning-mode.md) for
 recognition limitations, file changes, validation results, and the manual test checklist.
 
+The Alphabet and Basic Words sections contain lesson groups, with no individual
+alphabet practice tabs/cards. Choose Alphabet, Basic Words or Mixed in race setup
+for either mode. See [recognition and lesson fixes](docs/recognition-and-lessons-fixes.md)
+for root causes, changed files, validation and remaining webcam checks, and
+[expanded signs](docs/expanded-signs.md) for the sign practice checklist.
+
 ## Competition
 
 Choose 30/60/90/120 seconds before starting (default 60). The countdown begins after
-all cameras and recognition models are ready. Different letters transition naturally;
-repeated identical letters require a brief release. See [competition fixes and browser
+all cameras and recognition models are ready. Each race draws a new random sequence
+from the chosen pool (Alphabet, Basic Words or Mixed) and keeps adding signs until
+the timer reaches zero. A sign never repeats within the last few targets. E, M and N
+are left out of races for now. Each correct sign scores 1 point. Each player can skip up
+to 3 signs per race with their Skip button (0 points, no penalty); skips never pause
+the main timer. In Duo, both players get the same sequence and
+advance (and skip) independently; the higher score at zero wins, then fewer mistakes,
+otherwise it is a tie. Solo keeps five hearts, and losing
+the last heart ends the run early. See [competition fixes and browser
 checklist](docs/competition-fixes.md) for the B compatibility path and validation limits.
 

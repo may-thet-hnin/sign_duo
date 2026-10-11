@@ -19,7 +19,8 @@ let queue = Promise.resolve();
 self.onmessage = ({ data }) => {
   queue = queue.then(async () => {
     try {
-      model ??= load(data.base);
+      // A failed download is not cached, so the next camera can retry it.
+      model ??= load(data.base).catch(error => { model = undefined; throw error; });
       const { session, classes } = await model;
       if (!data.input) { self.postMessage({ id: data.id, ready: true }); return; }
       const start = performance.now();

@@ -1,12 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { normalizeLandmarks, validateClasses, softmax, decodePrediction } from '../src/recognition/preprocessing.js';
+import { normalizeLandmarks, validateClasses, softmax, decodePrediction, canonicalHand } from '../src/recognition/preprocessing.js';
 import { TemporalSmoother } from '../src/recognition/temporalSmoothing.js';
 import { RECOGNITION_CONFIG, SUPPORTED_SIGNS } from '../src/recognition/config.js';
 import { RecognitionController } from '../src/recognition/controller.js';
 import { RaceEngine } from '../src/utils/raceEngine.js';
-import { summarizeAttempt } from '../src/recognition/evaluation.js';
 import { releaseCamera } from '../src/recognition/cameraResources.js';
 
 const classes = JSON.parse(await readFile(new URL('../public/models/asl/mlp_classes.json', import.meta.url)));
@@ -40,10 +39,19 @@ test('official mapping, numerically stable softmax, confidence and full-class fi
   assert.deepEqual(softmax([10000, 10000]), [.5, .5]);
   assert.throws(() => softmax([NaN]));
   assert.equal(decodePrediction(logits('L'), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning).letter, 'L');
-  for (const c of ['J','Z','C','0']) {
+  // Digits and motion letters are never answers; 9 is the same handshape as F.
+  for (const c of ['J','Z','0','5']) {
     const result = decodePrediction(logits(c), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning);
-    assert.equal(result.raw, c); assert.equal(result.letter, null);
+    assert.equal(result.raw, c);
+    assert.ok(result.top.every(t => /^[A-Z]$/.test(t.letter) && !['J','Z'].includes(t.letter)));
   }
+  for (const c of ['F','9']) {
+    const result = decodePrediction(logits(c), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning);
+    assert.equal(result.raw, c); assert.equal(result.letter, 'F');
+  }
+  assert.equal(decodePrediction(logits('G'), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning).letter, null, 'excluded letters are never accepted');
+  const split = classes.map(c => c === '9' || c === 'F' ? 5 : c === 'W' ? 5.5 : -20);
+  assert.equal(decodePrediction(split, classes, { confidence: .5, margin: .05 }, ['F','W']).letter, 'F', '9 and F probabilities combine');
   assert.equal(decodePrediction(Array(36).fill(1), classes, RECOGNITION_CONFIG, SUPPORTED_SIGNS.learning).letter, null);
   assert.equal(decodePrediction(logits('A'), classes, { confidence: .85, margin: 1.1 }, ['A']).letter, null);
 });
@@ -65,10 +73,10 @@ test('time-based confirmation, no-hand reset, unknown, release and stale frames'
 test('competition generation and submissions enforce approved letters in both modes', () => {
   for (const mode of ['single', 'versus']) {
     const race = new RaceEngine({ mode });
-    assert.ok(race.targetLetters.every(c => SUPPORTED_SIGNS.competition.includes(c)));
+    assert.ok(Array.from({ length: 50 }, (_, i) => race.signAt(i)).every(c => SUPPORTED_SIGNS.competition.includes(c)));
     race.addPlayer('p1'); if (mode === 'versus') race.addPlayer('p2'); race.start(0);
-    for (const c of ['HELLO','YES','NO','THANK YOU','J','Z','C','0']) {
-      assert.throws(() => new RaceEngine({ mode, targetLetters: [c] }));
+    for (const c of ['THANK YOU','J','Z','G','0']) {
+      assert.throws(() => new RaceEngine({ mode, pool: [c] }));
       assert.equal(race.submitLetter('p1', c, 100).accepted, false);
     }
     assert.equal(race.getPlayer('p1').mistakes, 0);
@@ -88,10 +96,16 @@ test('controller skips concurrent frames and ignores inference after no-hand or 
   assert.equal(results.length, 1); await c.process(points, now + 300); assert.equal(calls, 2);
 });
 
-test('evaluation separates unknown negatives and attempt acceptance from frame agreement', () => {
-  const result = summarizeAttempt([{ raw: 'A', letter: 'A', status: 'stable', timestamp: 100, latencyMs: 2 }], 'UNKNOWN', 0, 200);
-  assert.equal(result.rawCorrectFraction, null); assert.equal(result.falseAcceptance, true);
-  assert.equal(result.acceptedCorrect, false);
+test('left hands are reflected into the model hand; right and unknown hands are unchanged', async () => {
+  assert.deepEqual(canonicalHand(points, 'Left').map(p => p.x), points.map(p => -p.x));
+  for (const handedness of ['Right', null]) assert.equal(canonicalHand(points, handedness), points);
+  const inputs = [];
+  const c = new RecognitionController({ infer: async input => { inputs.push(input); return { logits: logits('A'), classes, latencyMs: 1 }; }, onResult: () => {} });
+  await c.process(points, 0, { handedness: 'Right' });
+  await c.process(points, 100, { handedness: 'Left' });
+  assert.deepEqual(inputs[0], normalizeLandmarks(points));
+  assert.deepEqual(inputs[1], normalizeLandmarks(points.map(p => ({ ...p, x: -p.x }))));
+  c.dispose();
 });
 
 test('actual downloaded ONNX executes with CPU WASM and returns 36 finite logits', async () => {

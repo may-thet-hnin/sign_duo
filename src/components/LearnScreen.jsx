@@ -1,22 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import Camera from './Camera.jsx';
+import UnderstandingTest from './UnderstandingTest.jsx';
+import ResultsReveal from './ResultsReveal.jsx';
 import PixelSprite from './Pixel.jsx';
 import RecognitionDebug from './RecognitionDebug.jsx';
-import { LESSONS, QUIZ_SIGNS, REFERENCE_URL } from '../utils/lessonContent.js';
-import { emptyProgress, parseProgress, PROGRESS_KEY, recordPractice, recordAnswer, advanceProgress, replayProgress } from '../utils/learning.js';
+import { COURSE_LESSONS, REFERENCE_URL } from '../utils/lessonContent.js';
+import { SUPPORTED_SIGNS } from '../recognition/config.js';
+import { emptyCourseProgress, parseCourseProgress, COURSE_PROGRESS_KEY, PROGRESS_KEY, updateLessonProgress, recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress, skipPractice, markAttempted, recordTestResult } from '../utils/learning.js';
+import { TEST_LENGTH } from '../utils/understandingTest.js';
 import '../styles/learning.css';
 
 function SignReference({ sign, quiz = false, onReady }) {
   const [status, setStatus] = useState('loading');
+  if (sign.simplified) return <figure className="learn-reference">
+    <div className="learn-reference__image learn-motion" aria-label="Simplified open hand outward movement cue">
+      <span aria-hidden="true" className="learn-motion__hand">✋</span>
+      <p>Open hand → outward sweep</p>
+    </div>
+    <figcaption>Movement cue only. <a href={sign.referenceUrl} target="_blank" rel="noreferrer">Watch an ASL reference</a></figcaption>
+  </figure>;
   return <figure className="learn-reference">
     <div className="learn-reference__image">
       <img src={sign.image} alt={quiz ? 'ASL handshape to identify' : sign.description}
         referrerPolicy="no-referrer" onLoad={() => { setStatus('ready'); onReady?.(true); }}
         onError={() => { setStatus('error'); onReady?.(false); }} hidden={status === 'error'} />
       {status === 'loading' && <span role="status">Loading reference…</span>}
-      {status === 'error' && <p role="alert">Reference unavailable. Check your connection and reload before taking the quiz.</p>}
+      {status === 'error' && <p role="alert">Reference unavailable. Check your connection or open the ASL reference below.</p>}
     </div>
-    <figcaption><a href={REFERENCE_URL} target="_blank" rel="noreferrer">Photo: ASL University / Lifeprint</a></figcaption>
+    <figcaption><a href={sign.referenceUrl || REFERENCE_URL} target="_blank" rel="noreferrer">Reference: ASL University / Lifeprint{sign.movement ? ' · Watch the movement' : ''}</a></figcaption>
   </figure>;
 }
 
@@ -26,48 +37,39 @@ function ProgressBar({ value, label }) {
   </div>;
 }
 
-function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
+function Practice({ sign, onSuccess, onContinue, onSkip, previouslyPassed }) {
   const [recognition, setRecognition] = useState(null);
   const credited = useRef(false);
   const feedbackCandidate = useRef({ text: '', since: 0 });
-  const lastFrame = useRef(null);
   const [retry, setRetry] = useState(0);
+  const attemptNumber = useRef(0);
+  const sessionId = `practice:${sign.id}:${retry}`;
+  const currentSession = useRef(sessionId);
   const [result, setResult] = useState({ progress: 0, complete: false });
   const [detected, setDetected] = useState(null);
   const [feedback, setFeedback] = useState('Show your hand to the camera to begin.');
   const [cameraStatus, setCameraStatus] = useState({ ready: false, error: null });
 
-  useEffect(() => {
-    const watchdog = setInterval(() => {
-      if (!credited.current && lastFrame.current !== null && performance.now() - lastFrame.current > 300) {
-        lastFrame.current = null;
-        setResult({ progress: 0, complete: false });
-        setDetected(null);
-        setFeedback('Tracking paused. Show your hand to the camera again.');
-      }
-    }, 150);
-    return () => clearInterval(watchdog);
-  }, []);
-
+  // Camera reports stalled tracking itself ('tracking-paused'), so no second watchdog is needed here.
   function handleRecognition(next) {
-    if (credited.current) return;
-    lastFrame.current = performance.now();
+    if (credited.current || next.challengeId && next.challengeId !== currentSession.current) return;
     setRecognition(next);
     const matching = (next.candidate || next.letter) === sign.letter;
-    const complete = next.status === 'stable' && next.letter === sign.letter;
-    setResult({ progress: matching ? next.progress : 0, complete });
+    const progress = recognitionProgress(next, sign.letter, currentSession.current);
+    const complete = progress.complete;
+    setResult(progress);
     setDetected(next.candidate || next.letter || null);
     const text = next.status === 'error' ? `Recognition unavailable: ${next.error}`
-      : next.status === 'loading' ? 'Loading letter recognition?'
+      : next.status === 'loading' ? 'Loading sign recognition…'
       : next.status === 'no-hand' ? 'Show your hand to the camera.'
       : next.status === 'tracking-paused' ? 'Tracking paused. Show your hand again.'
       : next.status === 'out-of-frame' ? 'Make sure your entire hand is visible.'
       : !matching && next.candidate ? `I detected ${next.candidate}. Try making ${sign.letter}.`
-      : matching ? 'Almost there! Hold your hand steady.'
-      : "I can see your hand, but I can?t recognize the sign yet.";
+      : matching ? sign.movement ? `${next.phase || 'Starting pose'} · ${sign.movement}` : 'Almost there! Hold your hand steady.'
+      : 'I can see your hand, but cannot recognize the sign yet.';
     if (complete) {
       credited.current = true;
-      setFeedback(`Correct! You signed ${sign.letter}.`);
+      setFeedback(sign.simplified ? 'HELLO practice motion detected. Forehead position was not checked.' : `Practice detected: ${sign.letter}.`);
       onSuccess(sign.letter);
       return;
     }
@@ -77,50 +79,55 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
   }
 
   function tryAgain() {
+    const nextAttempt = ++attemptNumber.current;
+    currentSession.current = `practice:${sign.id}:${nextAttempt}`;
     credited.current = false;
     setResult({ progress: 0, complete: false });
     setDetected(null);
     setRecognition(null);
     setFeedback('Show your hand to the camera to begin.');
     feedbackCandidate.current = { text: '', since: 0 };
-    lastFrame.current = null;
     setCameraStatus({ ready: false, error: null });
-    setRetry(n => n + 1);
+    setRetry(nextAttempt);
   }
 
   return <div className="learn-practice">
     <article className="learn-panel glass">
       <p className="learn-eyebrow">Camera practice</p>
-      <h2>Make the letter <span className="learn-letter">{sign.letter}</span></h2>
-      <SignReference sign={sign} />
+      <h2>Practice <span className="learn-letter">{sign.letter}</span></h2>
       <ol className="learn-instructions">{sign.steps.map(step => <li key={step}>{step}</li>)}</ol>
-      <p className="learn-tip">Use one hand, good lighting, and keep your wrist and fingertips visible. Hold the sign steadily for about one second.</p>
+      <SignReference sign={sign} />
+      <p className="learn-tip">{sign.movement || 'Hold the sign steadily for about one second.'} Use one hand, good lighting, and keep your wrist and fingertips visible.</p>
+      {sign.simplified && <p className="learn-note">Simplified HELLO practice checks open-hand motion only. It cannot verify forehead position or the complete ASL sign.</p>}
       <p className="learn-note">The preview is mirrored. Either hand is welcome; accuracy varies with angle and lighting.</p>
     </article>
     <article className={`learn-panel learn-camera glass ${result.complete ? 'learn-success' : ''}`}>
       <div className="learn-camera__heading"><h3>Your turn</h3><span className="learn-pill">Target {sign.letter}</span></div>
-      <Camera key={retry} onRecognition={handleRecognition} onStatus={setCameraStatus} />
+      <Camera key={retry} challengeId={sessionId} targetSign={sign.letter} recognitionActive={!result.complete} onRecognition={handleRecognition} onStatus={setCameraStatus} />
       <div className="learn-readouts"><span>{cameraStatus.error ? 'Camera needs attention' : cameraStatus.ready ? 'Hand tracking ready' : 'Preparing camera'}</span><span>Detected: <strong>{detected || '—'}</strong></span></div>
       <p className="learn-feedback" data-success={result.complete} role="status">
         {cameraStatus.error ? 'Allow camera access or check your connection, then try again.' : feedback}
       </p>
-      <ProgressBar value={result.progress * 100} label="Stable recognition" />
-      <p className="learn-note">{result.complete ? 'Practice verified. Great work!' : `${Math.round(result.progress * 100)}% · Hold a matching sign steadily`}</p>
+      <ProgressBar value={result.progress * 100} label={sign.movement ? 'Gesture motion completion' : 'Stable recognition'} />
+      <p className="learn-note">{result.complete ? 'Practice detected. Great work!' : `${Math.round(result.progress * 100)}% · ${sign.movement ? 'Complete the movement' : 'Hold a matching sign steadily'}`}</p>
       {import.meta.env.DEV && <RecognitionDebug result={recognition} target={sign.letter} />}
       <div className="learn-actions">
         <button className="sd-button sd-button-secondary" onClick={tryAgain}>Try again</button>
+        {!result.complete && !previouslyPassed && <button className="sd-button sd-button-secondary" onClick={onSkip}>Skip for now</button>}
         <button className="sd-button" disabled={!result.complete && !previouslyPassed} onClick={onContinue}>Continue</button>
       </div>
       {previouslyPassed && !result.complete && <p className="learn-note">This sign was already camera verified in this attempt. You can continue or practice again.</p>}
+      {!result.complete && !previouslyPassed && <p className="learn-note">Stuck? Skip for now and come back by replaying the lesson. Skipped signs do not count as practiced.</p>}
     </article>
   </div>;
 }
 
-function KnowledgeCheck({ index, onSubmit, onContinue, savedAnswer }) {
-  const sign = LESSONS.find(s => s.letter === QUIZ_SIGNS[index]);
+function KnowledgeCheck({ lesson, index, onSubmit, onContinue, savedAnswer }) {
+  const sign = lesson.content.find(s => s.letter === lesson.quiz[index]);
+  const words = lesson.category === 'words';
   const [selected, setSelected] = useState(savedAnswer || null);
   const [submitted, setSubmitted] = useState(Boolean(savedAnswer));
-  const [imageReady, setImageReady] = useState(false);
+  const [imageReady, setImageReady] = useState(words);
   const submissionLock = useRef(Boolean(savedAnswer));
   const correct = selected === sign.letter;
   function submit(event) {
@@ -131,18 +138,18 @@ function KnowledgeCheck({ index, onSubmit, onContinue, savedAnswer }) {
     onSubmit(selected);
   }
   return <article className="learn-panel learn-quiz glass">
-    <p className="learn-eyebrow">Knowledge check {index + 1} / 3</p>
-    <h2>Which letter is this?</h2>
-    <p>Look at the photo, choose a letter, then check your answer.</p>
-    <SignReference sign={sign} quiz onReady={setImageReady} />
+    <p className="learn-eyebrow">Knowledge check {index + 1} / {lesson.quiz.length}</p>
+    <h2>{words ? sign.quizCue : 'Which letter is this?'}</h2>
+    <p>{words ? 'Choose the word whose movement matches the description.' : 'Look at the photo, choose a letter, then check your answer.'}</p>
+    {!words && <SignReference sign={sign} quiz onReady={setImageReady} />}
     <form onSubmit={submit}>
       <fieldset disabled={submitted || !imageReady} className="learn-options">
-        <legend>Choose one letter</legend>
-        {LESSONS.map(option => <label key={option.id} className="learn-option"
+        <legend>Choose one {words ? 'word' : 'letter'}</legend>
+        {lesson.content.map(option => <label key={option.id} className={`learn-option${words ? ' learn-option--word' : ''}`}
           data-selected={selected === option.letter}
           data-state={submitted ? option.letter === sign.letter ? 'right' : option.letter === selected ? 'wrong' : undefined : undefined}>
-          <input type="radio" name="letter" value={option.letter} checked={selected === option.letter} onChange={() => setSelected(option.letter)} />
-          <span className="hl__key">{option.letter}</span><span>Letter {option.letter}</span>
+          <input type="radio" name="sign" value={option.letter} checked={selected === option.letter} onChange={() => setSelected(option.letter)} />
+          <span className="hl__key">{option.letter}</span><span>{words ? option.letter === 'HELLO' ? 'Simplified greeting practice' : 'Basic word' : `Letter ${option.letter}`}</span>
           {submitted && option.letter === sign.letter && <span className="learn-option__mark">Correct</span>}
         </label>)}
       </fieldset>
@@ -150,95 +157,141 @@ function KnowledgeCheck({ index, onSubmit, onContinue, savedAnswer }) {
         {submitted ? correct ? 'Excellent! You identified the sign.' : `That was ${sign.letter}. ${sign.description}` : 'Your answer will appear here after you submit.'}
       </p>
       {!submitted && <button className="sd-button" disabled={!selected || !imageReady} type="submit">Check answer</button>}
-      {submitted && <button className="sd-button" type="button" onClick={onContinue}>{index === 2 ? 'See results' : 'Next question'}</button>}
+      {submitted && <button className="sd-button" type="button" onClick={onContinue}>{index === lesson.quiz.length - 1 ? 'See results' : 'Next question'}</button>}
     </form>
   </article>;
 }
 
 export default function LearnScreen() {
-  const [progress, setProgress] = useState(() => {
-    try { return parseProgress(localStorage.getItem(PROGRESS_KEY)); }
-    catch { return emptyProgress(); }
+  const [course, setCourse] = useState(() => {
+    try { return parseCourseProgress(localStorage.getItem(COURSE_PROGRESS_KEY), localStorage.getItem(PROGRESS_KEY)); }
+    catch { return emptyCourseProgress(); }
   });
+  const [lessonId, setLessonId] = useState(COURSE_LESSONS[0].id);
   const [view, setView] = useState('dashboard');
   const [saveError, setSaveError] = useState(false);
+  // Lesson just finished in this session: its completion screen gets the celebration.
+  const [justCompleted, setJustCompleted] = useState(null);
   const headingRef = useRef(null);
+  const lesson = COURSE_LESSONS.find(item => item.id === lessonId);
+  const progress = course.lessons[lessonId];
   const position = progress.position;
-  const sign = LESSONS[Math.min(2, Math.floor(position / 2))];
-  const quizScore = progress.answers.reduce((score, answer, i) => score + Number(answer === QUIZ_SIGNS[i]), 0);
+  const sign = lesson.content[Math.min(lesson.content.length - 1, Math.floor(position / 2))];
+  const quizScore = progress.answers.reduce((score, answer, i) => score + Number(answer === lesson.quiz[i]), 0);
+  const mastered = new Set(Object.values(course.lessons).flatMap(p => p.mastered));
+  const completedLessons = Object.values(course.lessons).filter(p => p.completed || p.completions > 0).length;
+  const successfulAttempts = Object.values(course.lessons).reduce((sum, p) => sum + p.successfulAttempts, 0);
 
   useEffect(() => {
-    // Storage is an external system; report failures after the sync completes.
     let active = true;
     Promise.resolve().then(() => {
       if (!active) return;
-      try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); setSaveError(false); }
+      try { localStorage.setItem(COURSE_PROGRESS_KEY, JSON.stringify(course)); setSaveError(false); }
       catch { setSaveError(true); }
     });
     return () => { active = false; };
-  }, [progress]);
-  useEffect(() => { headingRef.current?.focus(); }, [view, position]);
+  }, [course]);
+  // Each lesson step starts with its heading at the top of the window, so the
+  // instructions and camera are visible without scrolling past the page header.
+  // The dashboard returns to the top of the page.
+  useEffect(() => {
+    headingRef.current?.focus({ preventScroll: true });
+    if (view === 'dashboard') window.scrollTo({ top: 0 });
+    else headingRef.current?.scrollIntoView({ block: 'start' });
+  }, [view, position, lessonId]);
 
-  function replay() {
-    setProgress(replayProgress);
+  function updateProgress(update) {
+    setCourse(old => updateLessonProgress(old, lessonId, update));
+  }
+  function openLesson(id) {
+    setJustCompleted(null);
+    setCourse(old => updateLessonProgress(old, id, markAttempted));
+    setLessonId(id);
     setView('lesson');
   }
-  function practiceSuccess(letter) {
-    setProgress(old => recordPractice(old, letter));
+  function replay(id = lessonId) {
+    setCourse(old => updateLessonProgress(old, id, replayProgress));
+    openLesson(id);
   }
   function advance() {
-    setProgress(advanceProgress);
+    // The celebration plays only when this click finishes the lesson, not when
+    // a completed lesson is reopened later.
+    if (progress.position + 1 === lesson.activityCount) setJustCompleted(lessonId);
+    updateProgress(old => advanceProgress(old, lesson));
   }
 
   return <section className="learning" aria-label="Sign language learning">
-    <h2 ref={headingRef} tabIndex={-1} className="learn-heading">{view === 'dashboard' ? 'Master signs one step at a time.' : position === 9 ? 'Lesson completed!' : `Getting started · ${position < 6 ? sign.letter : 'Review'}`}</h2>
+    <h2 ref={headingRef} tabIndex={-1} className="learn-heading">{view === 'dashboard' ? 'Master signs one lesson at a time.' : view === 'test' ? `${lesson.title} · Test` : progress.completed ? `${lesson.title} completed!` : `${lesson.title} · ${position < lesson.practiceActivities ? sign.letter : 'Review'}`}</h2>
     {saveError && <p className="sd-error" role="alert">Your browser could not save progress. You can keep learning, but this attempt may be lost after a refresh.</p>}
     {view === 'dashboard' ? <>
-      <p className="learn-intro">Learn the handshape, observe a reference, practice with your camera, and check what you remember. Take your time—there are no lost hearts here.</p>
+      <p className="learn-intro">Each lesson teaches a small group of signs with guided references, camera practice, and knowledge checks. Take your time. There are no lost hearts here.</p>
       <div className="learn-summary glass">
-        <div><strong>{progress.mastered.length} / 3</strong><span>Signs camera verified</span></div>
-        <div><strong>{progress.completions}</strong><span>Lessons completed</span></div>
-        <div><strong>{progress.successfulAttempts}</strong><span>Successful practices</span></div>
+        <div><strong>{mastered.size} / {SUPPORTED_SIGNS.learning.length}</strong><span>Signs practiced with camera</span></div>
+        <div><strong>{completedLessons} / {COURSE_LESSONS.length}</strong><span>Lessons completed</span></div>
+        <div><strong>{successfulAttempts}</strong><span>Successful practices</span></div>
       </div>
-      <div className="learn-lesson-grid">
-        <article className="learn-panel glass">
-          <p className="learn-eyebrow">Lesson 1 · Camera supported</p><h3>Getting started</h3>
-          <div className="learn-signs">{LESSONS.map(s => <span key={s.id} className="learn-pill">{s.letter}{progress.practiced.includes(s.letter) ? ' ✓' : ''}</span>)}</div>
-          <p>Three guided signs, three camera practices, and a short knowledge check.</p>
-          <ProgressBar value={position / 9 * 100} label="Getting started lesson progress" />
-          <p className="learn-note">{progress.completed ? `Complete · Quiz ${quizScore} / 3` : position > 0 ? `In progress · Activity ${position + 1} / 9` : 'Ready when you are · 9 activities'}</p>
-          <button className="sd-button" onClick={() => progress.completed ? replay() : setView('lesson')}>{progress.completed ? 'Replay lesson' : position > 0 ? 'Continue lesson' : 'Start lesson'}</button>
-        </article>
-        <article className="learn-panel learn-coming glass">
-          <p className="learn-eyebrow">Lesson 2 · Coming soon</p><h3>More letters</h3>
-          <p>New lessons will unlock when more signs can be recognized reliably.</p><span className="learn-pill">Coming soon</span>
-        </article>
+      {[['Alphabet', 'alphabet'], ['Basic Words', 'words']].map(([title, category]) => <section className="learn-category" aria-label={title} key={category}>
+        <h3>{title}</h3>
+        <div className="learn-lesson-grid">{COURSE_LESSONS.filter(item => item.category === category).map(item => {
+          const saved = course.lessons[item.id];
+          const score = saved.answers.reduce((total, answer, i) => total + Number(answer === item.quiz[i]), 0);
+          return <article className="learn-panel glass" key={item.id}>
+            <p className="learn-eyebrow">Lesson {COURSE_LESSONS.indexOf(item) + 1} · {category === 'words' ? 'Motion practice' : 'Alphabet'}</p>
+            <h3>{item.title}</h3>
+            <div className="learn-signs">{item.signs.map(letter => <span className="learn-pill" key={letter}>{letter}{saved.practiced.includes(letter) ? ' ✓' : saved.skipped.includes(letter) ? ' · skipped' : ''}</span>)}</div>
+            <p>{item.signs.length} guided signs, {item.signs.length} camera practices, and {item.quiz.length} knowledge checks.</p>
+            {category === 'words' && <p className="learn-note">HELLO is simplified motion practice; forehead position cannot be verified.</p>}
+            <ProgressBar value={saved.position / item.activityCount * 100} label={`${item.title} lesson progress`} />
+            <p className="learn-note">{saved.completed ? `Complete · Quiz ${score} / ${item.quiz.length}${saved.skipped.length ? ` · ${saved.skipped.length} skipped` : ''}` : saved.position > 0 ? `In progress · Activity ${saved.position + 1} / ${item.activityCount}` : `Ready when you are · ${item.activityCount} activities`}</p>
+            {saved.completions > 0 && !saved.completed && <p className="learn-note">Previously completed · Replay in progress</p>}
+            {saved.attempted
+              ? <div className="learn-split">
+                  <button className="sd-button sd-button-secondary" onClick={() => replay(item.id)}>Restart lesson</button>
+                  <button className="sd-button" onClick={() => openLesson(item.id)}>Continue</button>
+                </div>
+              : <button className="sd-button" onClick={() => openLesson(item.id)}>Start lesson</button>}
+            <button className="sd-button sd-button-secondary learn-test-button" onClick={() => { setLessonId(item.id); setView('test'); }}>Test your understanding</button>
+            {saved.testBest !== null && <p className="learn-note">Best test: {saved.testBest} / {TEST_LENGTH} right first try</p>}
+          </article>;
+        })}</div>
+      </section>)}
+      <p className="learn-note">Recognition is an experimental practice aid. Words require motion; HELLO is simplified. An ASL teacher can help with technique and variations.</p>
+    </> : view === 'test' ? <>
+      <div className="learn-journey glass">
+        <button className="sd-link" onClick={() => setView('dashboard')}>Back to lessons</button>
+        <div><span>Test your understanding · {TEST_LENGTH} random signs from {lesson.signs.join(', ')} · No timer, no skips</span></div>
       </div>
-      <p className="learn-note">Live evaluation supports A, B, and L using experimental handshape rules. It is a practice aid; an ASL teacher can help with technique and variations.</p>
+      <UnderstandingTest key={lessonId} lesson={lesson}
+        onFinish={score => updateProgress(old => recordTestResult(old, score))} onExit={() => setView('dashboard')} />
     </> : <>
       <div className="learn-journey glass">
-        <button className="sd-link" onClick={() => setView('dashboard')}>Back to learning</button>
-        <div><span>{position === 9 ? '9 / 9 activities complete' : `Activity ${position + 1} / 9 · ${position < 6 ? position % 2 === 0 ? 'Learn & observe' : 'Camera practice' : 'Knowledge check'}`}</span><ProgressBar value={position / 9 * 100} label="Lesson progress" /></div>
+        <button className="sd-link" onClick={() => setView('dashboard')}>Back to lessons</button>
+        <div><span>{progress.completed ? `${lesson.activityCount} / ${lesson.activityCount} activities complete` : `Activity ${position + 1} / ${lesson.activityCount} · ${position < lesson.practiceActivities ? position % 2 === 0 ? 'Learn & observe' : 'Camera practice' : 'Knowledge check'}`}</span><ProgressBar value={position / lesson.activityCount * 100} label={`${lesson.title} progress`} /></div>
       </div>
-      {position < 6 && position % 2 === 0 && <article className="learn-panel learn-guided glass" key={position}>
-        <div><p className="learn-eyebrow">Learn & observe</p><h2>Let’s learn <span className="learn-letter">{sign.letter}</span></h2><SignReference sign={sign} /></div>
+      {position < lesson.practiceActivities && position % 2 === 0 && <article className="learn-panel learn-guided glass" key={`${lessonId}:${position}`}>
+        <div><p className="learn-eyebrow">Learn & observe</p><h2>Let's learn <span className="learn-letter">{sign.letter}</span></h2><SignReference sign={sign} /></div>
         <div><h3>{sign.name}</h3><ol className="learn-instructions">{sign.steps.map(step => <li key={step}>{step}</li>)}</ol>
           <p className="learn-tip"><strong>What to watch for</strong><br />{sign.mistake}</p>
+          {sign.movement && <p className="learn-tip">{sign.movement}</p>}
           <button className="sd-button" onClick={advance}>Try it yourself</button>
           <p className="learn-note">Camera access is requested during practice. Your video stays in this browser.</p>
         </div>
       </article>}
-      {position < 6 && position % 2 === 1 && <Practice key={position} sign={sign} onSuccess={practiceSuccess} onContinue={advance} previouslyPassed={progress.practiced.includes(sign.letter)} />}
-      {position >= 6 && position < 9 && <KnowledgeCheck key={position} index={position - 6} savedAnswer={progress.answers[position - 6]}
-        onSubmit={answer => setProgress(old => recordAnswer(old, answer))} onContinue={advance} />}
-      {position === 9 && <article className="learn-panel learn-complete glass">
-        <PixelSprite name="trophy" scale={7} /><h3>You built a strong start.</h3>
-        <p>You camera verified A, B, and L. Keep practicing at a comfortable pace.</p>
+      {position < lesson.practiceActivities && position % 2 === 1 && <Practice key={`${lessonId}:${position}`} sign={sign} onSuccess={letter => updateProgress(old => recordPractice(old, letter, lesson))} onContinue={advance} onSkip={() => updateProgress(old => skipPractice(old, lesson))} previouslyPassed={progress.practiced.includes(sign.letter)} />}
+      {position >= lesson.practiceActivities && position < lesson.activityCount && <KnowledgeCheck key={`${lessonId}:${position}`} lesson={lesson} index={position - lesson.practiceActivities} savedAnswer={progress.answers[position - lesson.practiceActivities]}
+        onSubmit={answer => updateProgress(old => recordAnswer(old, answer, lesson))} onContinue={advance} />}
+      {progress.completed && <ResultsReveal key={`${lessonId}:${progress.completions}`} play={justCompleted === lessonId}
+        title="LESSON CLEAR!" subtitle={lesson.title}>
+      <article className="learn-panel learn-complete glass">
+        <PixelSprite name="trophy" scale={7} /><h3>{lesson.title} complete.</h3>
+        <p>{progress.practiced.length ? `You practiced ${progress.practiced.join(', ')} with the camera.` : 'You finished the lesson without camera practice.'} Keep practicing at a comfortable pace.</p>
         <div className="learn-signs">{progress.practiced.map(letter => <span className="learn-pill" key={letter}>{letter} ✓</span>)}</div>
-        <p className="learn-score">Quiz score: {quizScore} / 3 ({Math.round(quizScore / 3 * 100)}%)</p>
-        <p>{quizScore === 3 ? 'Excellent recall! Try these signs again in a race.' : 'Every review helps. Replay the lesson to build your recall.'}</p>
-        <div className="learn-actions"><button className="sd-button" onClick={replay}>Replay lesson</button><button className="sd-button sd-button-secondary" onClick={() => setView('dashboard')}>Back to learning</button></div>
-      </article>}
+        {progress.skipped.length > 0 && <p className="learn-note">Skipped for now: {progress.skipped.join(', ')}. Replay the lesson to practice {progress.skipped.length === 1 ? 'it' : 'them'} with the camera.</p>}
+        <p className="learn-score">Quiz score: {quizScore} / {lesson.quiz.length} ({Math.round(quizScore / lesson.quiz.length * 100)}%)</p>
+        <p>{quizScore === lesson.quiz.length ? 'Excellent recall! Try these signs again in a race.' : 'Every review helps. Replay the lesson to build your recall.'}</p>
+        <div className="learn-actions"><button className="sd-button" onClick={() => replay()}>Replay lesson</button><button className="sd-button sd-button-secondary" onClick={() => setView('dashboard')}>Back to lessons</button></div>
+      </article>
+      </ResultsReveal>}
     </>}
   </section>;
 }

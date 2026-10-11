@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import PixelSprite from './Pixel.jsx';
 
 /* Everything here is deterministic so renders are stable. */
@@ -26,8 +27,9 @@ function hillRects(seed, base, amp) {
 const FAR = hillRects(1.2, 26, 9);
 const NEAR = hillRects(4.1, 14, 7);
 
-/** Fixed 16-bit dusk backdrop. Gives the glass panels something to refract. */
-export default function Scenery() {
+/** Fixed 16-bit dusk backdrop. Gives the glass panels something to refract.
+ * Memoized: it has no props, and App re-renders on every recognition update. */
+export default memo(function Scenery() {
   return (
     <div className="sd-scenery" aria-hidden="true">
       <div className="sd-blob sd-blob--aqua" />
@@ -55,4 +57,4 @@ export default function Scenery() {
       </svg>
     </div>
   );
-}
+});

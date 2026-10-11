@@ -4,22 +4,16 @@ import PixelSprite from "./Pixel.jsx";
  * ResultsScreen: shows the winner and a head-to-head stats comparison.
  *
  * Props
- * - players:   [{ id, name, score, lives, maxLives, progress,
- *                 correct, attempts, bestStreak, timeSeconds }, ...]  (exactly two)
+ * - players:   [{ id, name, score, lives, maxLives,
+ *                 correct, attempts, bestStreak, spm, skipped }, ...]  (exactly two)
  * - winnerId:  optional. Overrides the automatic winner; null is an explicit tie.
+ * - winReason: optional. "more_points" | "fewer_mistakes" (from RaceEngine).
  * - onRematch: called when "Play again" is pressed
  * - onHome:    called when "Back to menu" is pressed (button hidden if omitted)
  */
 
 function Trophy() {
   return <PixelSprite name="trophy" scale={7} className="rs__trophy" />;
-}
-
-function formatTime(sec) {
-  if (sec == null) return "–";
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function accuracy(p) {
@@ -30,11 +24,15 @@ function accuracy(p) {
 function pickWinner(a, b, winnerId) {
   if (winnerId !== undefined) return a.id === winnerId ? a : b.id === winnerId ? b : null;
   if (a.score !== b.score) return a.score > b.score ? a : b;
-  if (a.progress !== b.progress) return a.progress > b.progress ? a : b;
   return null; // tie
 }
 
-export default function ResultsScreen({ players, winnerId, onRematch, onHome, durationSeconds }) {
+const WIN_REASONS = {
+  more_points: "Highest score when time ran out",
+  fewer_mistakes: "Same correct signs, fewer mistakes",
+};
+
+export default function ResultsScreen({ players, winnerId, winReason, onRematch, onHome, durationSeconds }) {
   const [a, b] = players;
   const winner = pickWinner(a, b, winnerId);
   const loser = winner ? (winner.id === a.id ? b : a) : null;
@@ -47,8 +45,8 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome, du
     { label: "Correct signs", get: (p) => p.correct, show: (p) => `${p.correct} / ${p.attempts}`, higher: true },
     { label: "Best streak", get: (p) => p.bestStreak, show: (p) => p.bestStreak, higher: true },
     { label: "Hearts left", get: (p) => p.lives, show: (p) => `${p.lives} / ${p.maxLives}`, higher: true },
-    { label: "Progress", get: (p) => p.progress, show: (p) => `${Math.round(p.progress)}%`, higher: true, bar: true },
-    { label: "Time", get: (p) => p.timeSeconds, show: (p) => formatTime(p.timeSeconds), higher: false },
+    { label: "Signs per minute", get: (p) => p.spm, show: (p) => p.spm, higher: true },
+    { label: "Skipped", get: (p) => p.skipped, show: (p) => p.skipped, higher: false },
   ];
 
   // Hearts only exist in solo-style play; hide the row when neither player has any.
@@ -70,10 +68,8 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome, du
         <h1 className="rs__title">{winner ? winner.name : "It's a tie!"}</h1>
         <p className="rs__sub">
           {winner
-            ? margin > 0
-              ? `Won by ${margin.toLocaleString()} points`
-              : "Won on progress"
-            : "Both players finished level"}
+            ? WIN_REASONS[winReason] ?? `Won by ${margin.toLocaleString()} point${margin === 1 ? '' : 's'}`
+            : "Same correct signs and mistakes"}
         </p>
       </section>
 
@@ -101,11 +97,6 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome, du
                 ].map(([p, other]) => (
                   <td key={p.id} className={`rs__p--${p.id}`} data-best={isBest(row, p, other)}>
                     {row.show(p)}
-                    {row.bar && (
-                      <div className="rs__bar sd-bar" aria-hidden="true">
-                        <div className="sd-bar__fill" style={{ "--pct": `${Math.min(100, p.progress)}%` }} />
-                      </div>
-                    )}
                   </td>
                 ))}
               </tr>
@@ -123,19 +114,3 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome, du
     </div>
   );
 }
-
-/* Example usage
-
-import ResultsScreen from "./ResultsScreen";
-
-<ResultsScreen
-  players={[
-    { id: "p1", name: "Player 1", score: 1250, lives: 2, maxLives: 3, progress: 100,
-      correct: 11, attempts: 13, bestStreak: 6, timeSeconds: 94 },
-    { id: "p2", name: "Player 2", score: 980, lives: 1, maxLives: 3, progress: 85,
-      correct: 9, attempts: 14, bestStreak: 4, timeSeconds: 101 },
-  ]}
-  onRematch={() => {}}
-  onHome={() => {}}
-/>
-*/

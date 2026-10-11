@@ -328,14 +328,17 @@ export class RaceEngine {
   }
 
   getCompetitionScore(player, now = this.clock()) {
-    const spm = this.getSPM(player, now);
-    const accuracy = this.getAccuracy(player) / 100;
+    const { elapsedSeconds } = this.getTime(now);
+    if (elapsedSeconds <= 0) return 0;
 
-    // Tunable starting weights: 70% correct letters,
-    // 30% adjusted SPM.
-    return Number(
-      (spm * accuracy).toFixed(2)
-    );
+    // Each mistake subtracts 1 correct character (you can increase this to 2 or 3 for harsher penalties)
+    const mistakePenalty = 1; 
+    const netCorrect = player.correct - (player.mistakes * mistakePenalty);
+
+    const score = (netCorrect * 60) / elapsedSeconds;
+    
+    // Prevent score from dropping below 0
+    return Number(Math.max(0, score).toFixed(2));
   }
 
   getPlayerSnapshot(player, now = this.clock()) {

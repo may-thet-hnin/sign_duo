@@ -11,12 +11,12 @@ import { releaseCamera } from '../recognition/cameraResources.js'
  * @param {string | undefined} deviceId  Optional camera id for two-player mode
  * @param {(landmarks: {x:number,y:number,z:number}[] | null) => void} onLandmarks
  */
-export default function Camera({ deviceId, onLandmarks, onStatus, onRecognition, challengeId = null, recognitionActive = true }) {
+export default function Camera({ deviceId, onLandmarks, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true }) {
   // A device change gets fresh state and fully tears down the previous session.
-  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} recognitionActive={recognitionActive} />
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} />
 }
 
-function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challengeId, recognitionActive }) {
+function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challengeId, targetSign, recognitionActive }) {
   const videoRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraLoading, setCameraLoading] = useState(true)
@@ -26,12 +26,17 @@ function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challen
   const recognitionCallback = useRef(onRecognition)
   const challengeRef = useRef(challengeId)
   const activeRef = useRef(recognitionActive)
+  const targetRef = useRef(targetSign)
   const [recognitionReady, setRecognitionReady] = useState(false)
   const [recognitionError, setRecognitionError] = useState(null)
   useEffect(() => {
     challengeRef.current = challengeId
     controllerRef.current?.setChallenge(challengeId)
   }, [challengeId])
+  useEffect(() => {
+    targetRef.current = targetSign
+    controllerRef.current?.setTarget(targetSign)
+  }, [targetSign])
   useEffect(() => { activeRef.current = recognitionActive }, [recognitionActive])
   useEffect(() => { recognitionCallback.current = onRecognition }, [onRecognition])
   useEffect(() => {
@@ -43,13 +48,18 @@ function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challen
         recognitionCallback.current?.(result)
       } })
     controller.setChallenge(challengeRef.current)
+    controller.setTarget(targetRef.current)
     controllerRef.current = controller
     recognitionCallback.current?.({ status: 'loading', letter: null, progress: 0 })
     let ready = false
     let lastFrame = performance.now()
     controllerRef.current.feed = points => {
       lastFrame = performance.now()
-      if (ready && activeRef.current) controller.process(points, lastFrame)
+      if (ready && activeRef.current) {
+        const video = videoRef.current
+        const aspectRatio = video?.videoWidth && video?.videoHeight ? video.videoWidth / video.videoHeight : 1
+        controller.process(points, lastFrame, { aspectRatio })
+      }
     }
     requestModel().then(() => { if (!cancelled) { ready = true; setRecognitionReady(true) } }).catch(error => {
       if (!cancelled) {

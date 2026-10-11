@@ -5,18 +5,16 @@ import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
 import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
-import { RACE_DURATIONS } from './recognition/config.js';
+import { RACE_DURATIONS, CHALLENGE_SEQUENCES } from './recognition/config.js';
 import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
-const TEST_SEQUENCE = ['A', 'B', 'L', 'A', 'L', 'B', 'L', 'A', 'B', 'L', 'B', 'A'];
-
-function asResultPlayer(player, snapshot) {
+function asResultPlayer(player, snapshot, sequenceLength) {
   return {
     id: player.id, name: player.name,
     score: Math.round((snapshot.mode === 'versus' ? player.competitionScore : player.correct) * 100),
     lives: player.hearts ?? 0, maxLives: snapshot.mode === 'single' ? 5 : 0,
-    progress: (player.progress / TEST_SEQUENCE.length) * 100,
+    progress: (player.progress / sequenceLength) * 100,
     correct: player.correct, attempts: player.correct + player.mistakes,
     bestStreak: player.bestStreak,
     timeSeconds: snapshot.elapsedSeconds + player.penaltySeconds,
@@ -30,6 +28,8 @@ export default function App() {
   const [duration, setDuration] = useState(60);
   const [screen, setScreen] = useState('home');
   const [mode, setMode] = useState('single');
+  const [vocabulary, setVocabulary] = useState('alphabet');
+  const sequence = CHALLENGE_SEQUENCES[vocabulary];
   const [devices, setDevices] = useState([]);
   const [cameraIds, setCameraIds] = useState({ p1: '', p2: '' });
   const [deviceMessage, setDeviceMessage] = useState('');
@@ -80,7 +80,7 @@ export default function App() {
       if (mode === 'versus' && (!cameraIds.p1 || !cameraIds.p2 || cameraIds.p1 === cameraIds.p2)) {
         throw new Error('Duo Mode requires two different cameras. Find cameras and choose one for each player.');
       }
-      const engine = new RaceEngine({ mode, durationSeconds: duration, startingHearts: 5, penaltySeconds: 2, targetLetters: TEST_SEQUENCE });
+      const engine = new RaceEngine({ mode, durationSeconds: duration, startingHearts: 5, penaltySeconds: 2, targetLetters: sequence });
       engine.addPlayer('p1', 'Player 1');
       if (mode === 'versus') engine.addPlayer('p2', 'Player 2');
       stopRaceTimer();
@@ -172,7 +172,7 @@ export default function App() {
           <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>Choose your race duration. Five hearts.</p></article>
           <article className="sd-feature glass"><PixelSprite name="bolt" scale={5} /><h3>Duo</h3><p>Two webcams, one shared sequence, real-time competition.</p></article>
         </div>
-        <p className="sd-hint">Live recognition currently supports A, B and L. Hold each sign steadily to complete camera practice.</p>
+        <p className="sd-hint">Practice nine letters and three basic word motions. Hold letters steadily; complete the movement for words. HELLO uses simplified motion practice.</p>
       </section>}
 
       {screen === 'learn' && <section className="sd-learn">
@@ -199,6 +199,15 @@ export default function App() {
         </div>
         <div className="sd-duration glass">
           <fieldset className="sd-duration-options">
+            <legend>Choose your signs</legend>
+            <div>{[['alphabet', 'Alphabet'], ['words', 'Basic Words'], ['mixed', 'Mixed']].map(([value, label]) => <button type="button" key={value}
+              className={`sd-button sd-button-secondary ${vocabulary === value ? 'selected' : ''}`}
+              aria-pressed={vocabulary === value} onClick={() => setVocabulary(value)}>{label}</button>)}</div>
+          </fieldset>
+          {vocabulary !== 'alphabet' && <p className="sd-hint">Word motions are experimental. HELLO checks an outward open-hand sweep; forehead position is not checked.</p>}
+        </div>
+        <div className="sd-duration glass">
+          <fieldset className="sd-duration-options">
             <legend>Choose your race duration</legend>
             <div>{RACE_DURATIONS.map(seconds => <button type="button" key={seconds} className={`sd-button sd-button-secondary ${duration === seconds ? 'selected' : ''}`} aria-pressed={duration === seconds} onClick={() => setDuration(seconds)}>{seconds}s</button>)}</div>
           </fieldset>
@@ -214,15 +223,15 @@ export default function App() {
         <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
       </section>}
 
-      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} sequence={TEST_SEQUENCE} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
+      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} sequence={sequence} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
 
       {screen === 'results' && results && (mode === 'versus'
-        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.winnerId} onRematch={startRace} onHome={goHome} />
+        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results, sequence.length))} winnerId={results.winnerId} onRematch={startRace} onHome={goHome} />
         : <section className="sd-solo-result glass">
             <PixelSprite name="trophy" scale={7} className="sd-trophy" />
             <h1 className="sd-page-title">Great practice!</h1>
             <p>{results.durationSeconds}-second race · Score: {results.players[0].correct}</p>
-            <h2>{results.players[0].correct} / {TEST_SEQUENCE.length} signs correct</h2>
+            <h2>{results.players[0].correct} / {sequence.length} signs correct</h2>
             <dl className="sd-result-stats">
               <div><dt>Accuracy</dt><dd>{results.players[0].accuracy}%</dd></div>
               <div><dt>Best streak</dt><dd>{results.players[0].bestStreak}</dd></div>

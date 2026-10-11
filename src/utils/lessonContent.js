@@ -1,8 +1,8 @@
-import { SUPPORTED_SIGNS } from '../recognition/config.js';
+import { SUPPORTED_SIGNS, STARTER_SIGNS, ALPHABET_SIGNS, LESSON_GROUPS } from '../recognition/config.js';
 export const REFERENCE_URL = 'https://www.lifeprint.com/asl101/fingerspelling/abc.htm';
 
 // Photographic references from ASL University, never generated handshapes.
-export const LESSONS = [
+export const ALPHABET_LESSONS = [
   {
     id: 'a', letter: 'A', name: 'Fist with thumb alongside',
     image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/a.jpg',
@@ -24,10 +24,96 @@ export const LESSONS = [
     mistake: 'Keep the other three fingers curled and the thumb open. Use a comfortable wrist position.',
     description: 'An upright index finger and sideways thumb; the remaining fingers are curled.',
   },
-].filter(sign => SUPPORTED_SIGNS.learning.includes(sign.letter)).map(sign => ({
-  ...sign, category: 'alphabet', recognitionMethod: 'onnx-mlp', enabled: true,
+  {
+    id: 'c', letter: 'C', name: 'Curved open hand',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/c.jpg',
+    steps: ['Curve all four fingers together.', 'Curve the thumb underneath, leaving a visible C-shaped gap.', 'Keep the hand relaxed and show its curved profile to the camera.'],
+    mistake: 'Keep an opening between thumb and fingers; closing the gap makes O.',
+    description: 'Four curved fingers and a curved thumb forming an open C.',
+  },
+  {
+    id: 'd', letter: 'D', name: 'Index up, fingertips meet thumb',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/d.jpg',
+    steps: ['Extend the index finger.', 'Bring the middle, ring, and little fingertips toward the thumb.', 'Let the middle fingertip meet the thumb, making a small circle below the index.'],
+    mistake: 'Keep the thumb touching the curled fingers; an open sideways thumb resembles L.',
+    description: 'Index extended with the other fingers curved toward the thumb.',
+  },
+  {
+    id: 'i', letter: 'I', name: 'Little finger up',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/i.jpg',
+    steps: ['Fold the index, middle, and ring fingers.', 'Hold the thumb across the folded fingers.', 'Extend only your little finger.'],
+    mistake: 'Keep the thumb tucked; extending it produces Y.',
+    description: 'Little finger extended, other fingers folded and thumb tucked.',
+  },
+  {
+    id: 'v', letter: 'V', name: 'Two spread fingers',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/v.jpg',
+    steps: ['Extend the index and middle fingers.', 'Separate them into a V.', 'Fold the ring and little fingers with the thumb across them.'],
+    mistake: 'Keep the ring finger folded. Three extended fingers produce W.',
+    description: 'Index and middle fingers straight and separated; other fingers folded.',
+  },
+  {
+    id: 'w', letter: 'W', name: 'Three spread fingers',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/w.jpg',
+    steps: ['Extend the index, middle, and ring fingers.', 'Spread the three fingers.', 'Fold the little finger and hold it with the thumb.'],
+    mistake: 'Keep the ring finger fully extended and the little finger folded.',
+    description: 'Three spread upright fingers, with little finger folded and thumb tucked.',
+  },
+  {
+    id: 'y', letter: 'Y', name: 'Thumb and little finger out',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/y.jpg',
+    steps: ['Fold the index, middle, and ring fingers.', 'Extend your thumb and little finger.', 'Keep the wrist comfortable with both extended digits visible.'],
+    mistake: 'The thumb must be open. A tucked thumb resembles I.',
+    description: 'Thumb and little finger extended, with three middle fingers folded.',
+  },
+].filter(sign => SUPPORTED_SIGNS.learning.includes(sign.letter)).sort((a, b) => ALPHABET_SIGNS.indexOf(a.letter) - ALPHABET_SIGNS.indexOf(b.letter)).map(sign => ({
+  ...sign, category: 'alphabet', recognitionMethod: STARTER_SIGNS.includes(sign.letter) ? 'onnx-mlp' : 'static-geometry', enabled: true,
   modes: ['learning', ...(SUPPORTED_SIGNS.competition.includes(sign.letter) ? ['competition'] : [])],
 }));
 
+export const LESSONS = STARTER_SIGNS.map(letter => ALPHABET_LESSONS.find(sign => sign.letter === letter));
+export const WORD_LESSONS = [
+  {
+    id: 'hello', letter: 'HELLO', name: 'HELLO · simplified motion practice', simplified: true,
+    referenceUrl: 'https://www.lifeprint.com/asl101/pages-signs/h/hello.htm',
+    steps: ['Open all four fingers and your thumb.', 'Move the open hand smoothly outward to the side.', 'Sweep about one palm width. Release your hand before repeating.'],
+    movement: 'Open hand → sideways outward sweep.',
+    quizCue: 'Which practice gesture uses an open hand sweeping outward to the side?',
+    mistake: 'A stationary open palm does not count. This exercise cannot check forehead position.',
+    description: 'Simplified open-hand outward sweep; hand motion only, not a full ASL HELLO check.',
+  },
+  {
+    id: 'yes', letter: 'YES', name: 'Nodding fist',
+    image: 'https://www.lifeprint.com/asl101/signjpegs/y/yes1.jpg',
+    referenceUrl: 'https://www.lifeprint.com/asl101/pages-signs/y/yes.htm',
+    steps: ['Make a closed fist with the thumb across the fingers.', 'Bend your fist down at the wrist and back up like a nod.', 'Keep the wrist in roughly the same place. Release before repeating.'],
+    movement: 'Fist → bend down → return.',
+    quizCue: 'Which word uses a closed fist bending down and back up at the wrist?',
+    mistake: 'Moving the entire arm up and down is not a wrist nod. A stationary fist never counts.',
+    description: 'Closed fist nodding down and back up by bending at the wrist.',
+  },
+  {
+    id: 'no', letter: 'NO', name: 'Two fingers close to thumb',
+    image: 'https://www.lifeprint.com/asl101/gifs/n/no-2-movement.gif',
+    referenceUrl: 'https://www.lifeprint.com/asl101/pages-signs/n/no.htm',
+    steps: ['Extend index and middle fingers together, with ring and little fingers folded.', 'Leave a gap between the two fingertips and the thumb.', 'Close both fingertips toward the thumb. Reopen both fingers to repeat.'],
+    movement: 'Two fingers: open → close together to thumb.',
+    quizCue: 'Which word closes both index and middle fingertips toward the thumb?',
+    mistake: 'Both fingers must close toward the thumb. A one-finger pinch does not count.',
+    description: 'Index and middle fingers closing together toward the thumb.',
+  },
+].map(sign => ({ ...sign, category: 'words', enabled: true, modes: ['learning', 'competition'], recognitionMethod: 'temporal-geometry' }));
+
+export function signContent(letter) {
+  return [...ALPHABET_LESSONS, ...WORD_LESSONS].find(sign => sign.letter === letter);
+}
+
 // Different order from the guided sequence; the answer is not always option one.
-export const QUIZ_SIGNS = ['B', 'L', 'A'];
+export const QUIZ_SIGNS = LESSON_GROUPS[0].quiz;
+
+export const COURSE_LESSONS = LESSON_GROUPS.map(lesson => ({
+  ...lesson,
+  content: lesson.signs.map(signContent),
+  practiceActivities: lesson.signs.length * 2,
+  activityCount: lesson.signs.length * 2 + lesson.quiz.length,
+}));

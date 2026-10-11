@@ -359,6 +359,8 @@
 .sd-race-camera { grid-area: camera; min-width: 0; }
 .sd-race .sd-target { grid-area: target; padding: 12px; gap: 6px; align-content: center; }
 .sd-race .sd-target strong { font-size: clamp(48px, 6vw, 72px); }
+.sd-race .sd-target--word strong { font-size: clamp(18px, 2.4vw, 32px); overflow-wrap: anywhere; }
+.sd-word-guidance { font-family: var(--body); font-size: 14px; line-height: 1.4; color: var(--text-soft); }
 .sd-race .sd-target > span { font-size: 16px; }
 .sd-race .sd-target .sd-recognition-state { font-size: 13px; }
 .sd-race .sd-camera__frame { aspect-ratio: 16 / 9; max-height: min(34vh, 280px); border-radius: 12px; }
@@ -376,6 +378,7 @@
 .sd-race-progress .sd-bar { flex: 1; height: 16px; }
 .sd-race .sd-letters { gap: 5px; }
 .sd-race .sd-letters span { font-size: 11px; height: 27px; }
+.sd-race .sd-letters .sd-sequence-word { font-size: clamp(5px, .8vw, 8px); }
 .sd-race .sd-letters .current { animation: none; transform: none; box-shadow: 0 3px 0 var(--ink); }
 .sd-race .sd-letters .just-completed { animation: sd-accepted .35s ease-out; }
 .sd-race .sd-stats { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; }
@@ -394,6 +397,8 @@
   .sd-player-body { grid-template-columns: 1fr; grid-template-areas: 'target' 'camera'; gap: 12px; }
   .sd-race .sd-target { grid-template-columns: 1fr auto; text-align: left; justify-items: start; }
   .sd-race .sd-target strong { grid-column: 2; grid-row: 1 / 4; font-size: 48px; }
+  .sd-race .sd-target--word strong { font-size: 22px; }
+  .sd-race .sd-target--word .sd-word-guidance { grid-column: 1 / -1; }
   .sd-race .sd-camera__frame { max-height: none; }
   .sd-race .sd-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .sd-race .sd-race-header { top: 68px; gap: 10px; flex-wrap: nowrap; }

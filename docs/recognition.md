@@ -1,16 +1,17 @@
 # Recognition iteration 1: webcam validation required
 
-**Update:** See [competition fixes](competition-fixes.md) for current behavior.
+**Update:** See [expanded signs](expanded-signs.md) for the current vocabulary and
+manual testing, and [competition fixes](competition-fixes.md) for earlier changes.
 The architecture below describes the initial ONNX-only iteration. B now also has an
 explicitly labeled geometry path, and different stable letters do not require release.
 
 ## Scope and findings
 
-This iteration implements model integration and shared stability filtering only.
-A, B and L remain the only enabled learning and competition letters. No conversational
-gestures are enabled. J/Z, digits and every additional model class are rejected as
-playable predictions. HELLO/YES/NO/THANK YOU are rejected inside RaceEngine as both
-targets and submissions, in solo and duo modes. Expansion waits for user feedback.
+This document records the initial model integration and shared stability filtering.
+That iteration restricted playable predictions to A/B/L. The current vocabulary also
+includes C/D/I/V/W/Y geometry and HELLO/YES/NO motion practice in learning and races.
+HELLO is a labeled simplified exercise. J/Z, digits, THANK YOU and other unsupported
+signs remain excluded. See [expanded signs](expanded-signs.md) for current limitations.
 
 MediaPipe initializes in useHandTracking (VIDEO mode, one hand per camera, GPU with
 CPU fallback). Camera owns getUserMedia, video, overlay and stream cleanup. Tracking

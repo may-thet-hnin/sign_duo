@@ -10,6 +10,6 @@ export default function RecognitionDebug({ result, target }) {
         <div key={key}><dt>{key}</dt><dd>{value ?? '—'}</dd></div>)}
     </dl>
     <p>Top classes: {result.top?.map(p => `${p.letter} ${(p.confidence * 100).toFixed(1)}%`).join(' · ') || '—'}</p>
-    <p>Scores belong to the raw ONNX class. B geometry has no probability score. Both recognition methods remain experimental.</p>
+    <p>Scores belong to the raw ONNX class. Geometry and motion rule agreement are not calibrated probabilities. Recognition remains experimental.</p>
   </details>;
 }

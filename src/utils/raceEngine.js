@@ -39,7 +39,7 @@ export class RaceEngine {
       : this.generateLetters(500);
 
     if (!this.targetLetters.length || this.targetLetters.some(letter => !SUPPORTED_SIGNS.competition.includes(letter))) {
-      throw new Error('Competition targets must be approved letters: A, B, L.');
+      throw new Error(`Competition targets must be supported signs: ${SUPPORTED_SIGNS.competition.join(', ')}.`);
     }
     this.players = new Map();
     this.status = "waiting";

@@ -1,4 +1,5 @@
 import { isFingerExtended, getDistance } from './handGeometry.js';
+import { recognizeStaticGeometry } from '../recognition/staticGeometry.js';
 
 // Angle in the camera's XY plane. Unchanged by in-plane hand rotation.
 function thumbIndexAngle(points) {
@@ -10,11 +11,14 @@ function thumbIndexAngle(points) {
   return Math.acos(cos) * (180 / Math.PI);
 }
 
-// Experimental static handshape heuristics for A, B and L.
+// Experimental static handshape heuristics. Existing A/B/L rules are retained.
 // Confirm results against an ASL reference and calibrate with multiple people.
 export function recognizeLetter(landmarks) {
   if (!Array.isArray(landmarks) || landmarks.length !== 21 ||
       landmarks.some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
+
+  const added = recognizeStaticGeometry(landmarks).letter;
+  if (added) return added;
 
   const index = isFingerExtended(landmarks, 'index');
   const middle = isFingerExtended(landmarks, 'middle');

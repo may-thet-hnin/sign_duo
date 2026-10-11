@@ -6,7 +6,7 @@ Sign Duo teaches users the letters of ASL and checks accuracy using computer vis
 - JavaScript/React
 - Node.js
 - [Google Media Pipe](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) for the computer vision
-- Local ONNX Runtime Web ASL landmark MLP, plus an experimental B geometry compatibility path. Only A/B/L are enabled.
+- Local ONNX Runtime Web ASL landmark MLP for A/B/L, plus experimental geometry for B/C/D/I/V/W/Y and temporal word practice for YES/NO/HELLO. HELLO is a labeled simplified motion exercise.
 - [Camo App](https://camo.com/) for the second webcam (1v1 "signs per minute" contest)
 
 
@@ -27,16 +27,24 @@ Race scoring and the pixel/glass design are preserved.
 
 ## Learning Mode
 
-Lesson 1 teaches A, B, and L through guided instruction, photographic references,
-live camera practice, and three knowledge checks. Camera practice requires about
-900 ms of matching predictions plus sample/agreement validation. Progress is saved
-in this browser's localStorage; completed lessons can be replayed.
+Four lessons teach groups of three signs: A/B/L, C/D/I, V/W/Y, and HELLO/YES/NO.
+Each includes guided references, camera practice, and knowledge checks. Static
+letters require about 900 ms of matching predictions plus sample/agreement
+validation; words use motion milestones instead of a stationary hold. Each lesson
+saves its own progress in localStorage and can be resumed or replayed. Existing
+A/B/L checkpoints migrate into Lesson 1.
 
 Run `npm run dev`, then choose **Start learning**. Run `npm test`, `npm run lint`,
 and `npm run build` for automated checks.
 
 See [Learning Mode implementation and testing report](docs/learning-mode.md) for
 recognition limitations, file changes, validation results, and the manual test checklist.
+
+The Alphabet and Basic Words sections contain lesson groups, with no individual
+alphabet practice tabs/cards. Choose Alphabet, Basic Words or Mixed in race setup
+for either mode. See [recognition and lesson fixes](docs/recognition-and-lessons-fixes.md)
+for root causes, changed files, validation and remaining webcam checks, and
+[expanded signs](docs/expanded-signs.md) for the sign practice checklist.
 
 ## Competition
 

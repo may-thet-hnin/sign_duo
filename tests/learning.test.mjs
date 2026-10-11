@@ -125,10 +125,10 @@ test('solo hearts, duo penalties, results and race stabilization retain behavior
   duo.submitLetter('p2', 'B', 100);
   assert.equal(duo.getPlayer('p2').penaltySeconds, 2);
   duo.submitLetter('p1', 'A', 1000);
-  assert.equal(duo.status, 'running');
-  duo.submitLetter('p2', 'A', 2000);
   assert.equal(duo.status, 'finished');
+  assert.equal(duo.submitLetter('p2', 'A', 2000).accepted, false);
   assert.equal(duo.getResults(2000).winner.id, 'p1');
+  assert.equal(duo.getResults(2000).elapsedSeconds, 1);
   const stable = new LetterStabilizer();
   for (let i = 0; i < 5; i++) assert.equal(stable.addFrame('A').isNew, false);
   assert.equal(stable.addFrame('A').isNew, true);

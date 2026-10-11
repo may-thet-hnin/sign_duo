@@ -9,7 +9,8 @@
  * No React, webcam, model, or backend dependencies.
  */
 
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+import { SUPPORTED_SIGNS } from '../recognition/config.js';
+let nextRaceId = 0;
 
 export class RaceEngine {
   constructor({
@@ -18,33 +19,38 @@ export class RaceEngine {
     startingHearts = 5,
     penaltySeconds = 2,
     targetLetters = null,
-    countJAndZ = true,
+    clock = () => performance.now(),
   } = {}) {
     if (!["single", "versus"].includes(mode)) {
       throw new Error('Mode must be "single" or "versus".');
     }
 
     this.mode = mode;
+    this.id = ++nextRaceId;
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error('Race duration must be positive.');
+    this.clock = clock;
+    this.recognitionEvents = new Map();
     this.durationSeconds = durationSeconds;
     this.startingHearts = startingHearts;
     this.penaltySeconds = penaltySeconds;
-    this.countJAndZ = countJAndZ;
 
     this.targetLetters = targetLetters
       ? targetLetters.map((letter) => letter.toUpperCase())
       : this.generateLetters(500);
 
+    if (!this.targetLetters.length || this.targetLetters.some(letter => !SUPPORTED_SIGNS.competition.includes(letter))) {
+      throw new Error('Competition targets must be approved letters: A, B, L.');
+    }
     this.players = new Map();
     this.status = "waiting";
     this.startedAt = null;
     this.endedAt = null;
     this.endReason = null;
+    this.winnerId = null;
   }
 
   generateLetters(count) {
-    const letters = this.countJAndZ
-      ? ALPHABET
-      : ALPHABET.replace(/[JZ]/g, "");
+    const letters = SUPPORTED_SIGNS.competition;
 
     return Array.from({ length: count }, () => {
       return letters[Math.floor(Math.random() * letters.length)];
@@ -83,7 +89,7 @@ export class RaceEngine {
     });
   }
 
-  start(now = Date.now()) {
+  start(now = this.clock()) {
     if (this.status !== "waiting") {
       throw new Error("Race has already started or ended.");
     }
@@ -102,7 +108,7 @@ export class RaceEngine {
     return this.getSnapshot(now);
   }
 
-  getTime(now = Date.now()) {
+  getTime(now = this.clock()) {
     if (this.startedAt === null) {
       return {
         elapsedSeconds: 0,
@@ -134,13 +140,29 @@ export class RaceEngine {
     return this.targetLetters[player.progress] ?? null;
   }
 
+  getChallengeId(playerId) {
+    return `${this.id}:${playerId}:${this.getPlayer(playerId).progress}`;
+  }
+
+  submitRecognition(playerId, result, now = this.clock()) {
+    if (this.status !== 'running') return { accepted: false, reason: 'race_not_running' };
+    if (result?.status !== 'stable' || !result.isNew || !result.eventId || !SUPPORTED_SIGNS.competition.includes(result.letter)) {
+      return { accepted: false, reason: 'not_validated' };
+    }
+    if (result.challengeId !== this.getChallengeId(playerId)) return { accepted: false, reason: 'stale_challenge' };
+    const events = this.recognitionEvents.get(playerId) || new Set();
+    if (events.has(result.eventId)) return { accepted: false, reason: 'duplicate_event' };
+    events.add(result.eventId); this.recognitionEvents.set(playerId, events);
+    return this.submitLetter(playerId, result.letter, now);
+  }
+
   /**
    * Submit ONE distinct recognized gesture.
    *
    * Call this only after your recognition layer determines
    * that a new letter gesture has occurred.
    */
-  submitLetter(playerId, predictedLetter, now = Date.now()) {
+  submitLetter(playerId, predictedLetter, now = this.clock()) {
     if (this.status !== "running") {
       return { accepted: false, reason: "race_not_running" };
     }
@@ -161,7 +183,7 @@ export class RaceEngine {
       .trim()
       .toUpperCase();
 
-    if (!/^[A-Z]$/.test(letter)) {
+    if (!SUPPORTED_SIGNS.competition.includes(letter)) {
       return { accepted: false, reason: "invalid_letter" };
     }
 
@@ -225,7 +247,7 @@ export class RaceEngine {
     };
   }
 
-  updateTime(now = Date.now()) {
+  updateTime(now = this.clock()) {
     if (this.status !== "running") {
       return this.getSnapshot(now);
     }
@@ -241,7 +263,7 @@ export class RaceEngine {
     return this.getSnapshot(now);
   }
 
-  checkRaceEnd(now = Date.now()) {
+  checkRaceEnd(now = this.clock()) {
     if (this.status !== "running") return;
 
     const players = [...this.players.values()];
@@ -255,13 +277,16 @@ export class RaceEngine {
       return;
     }
 
-    // Versus ends early only when both players finish.
-    if (players.every((player) => player.finished)) {
-      this.end(now, "all_players_finished");
+    // Camera callbacks are processed sequentially. The first accepted completion
+    // wins, including callbacks with the same timestamp or React render batch.
+    const finisher = players.find((player) => player.finished);
+    if (finisher) {
+      this.winnerId = finisher.id;
+      this.end(now, "player_finished");
     }
   }
 
-  end(now = Date.now(), reason = "manual") {
+  end(now = this.clock(), reason = "manual") {
     if (this.status !== "running") {
       return this.getResults(now);
     }
@@ -270,10 +295,19 @@ export class RaceEngine {
     this.endedAt = now;
     this.endReason = reason;
 
+    if (this.mode === 'versus' && this.winnerId === null) {
+      const ranking = this.getResults(now).ranking;
+      const [first, second] = ranking;
+      if (first && second && (first.competitionScore !== second.competitionScore ||
+          first.correct !== second.correct || first.spm !== second.spm)) {
+        this.winnerId = first.id;
+      }
+    }
+
     return this.getResults(now);
   }
 
-  getSPM(player, now = Date.now()) {
+  getSPM(player, now = this.clock()) {
     const { elapsedSeconds } = this.getTime(now);
 
     if(elapsedSeconds <= 0) return 0;
@@ -293,7 +327,7 @@ export class RaceEngine {
     );
   }
 
-  getCompetitionScore(player, now = Date.now()) {
+  getCompetitionScore(player, now = this.clock()) {
     const spm = this.getSPM(player, now);
     const accuracy = this.getAccuracy(player) / 100;
 
@@ -304,10 +338,11 @@ export class RaceEngine {
     );
   }
 
-  getPlayerSnapshot(player, now = Date.now()) {
+  getPlayerSnapshot(player, now = this.clock()) {
     return {
       ...player,
       currentTarget: this.getCurrentTarget(player.id),
+      challengeId: this.getChallengeId(player.id),
       spm: this.getSPM(player, now),
       accuracy: this.getAccuracy(player),
       competitionScore:
@@ -317,8 +352,9 @@ export class RaceEngine {
     };
   }
 
-  getSnapshot(now = Date.now()) {
+  getSnapshot(now = this.clock()) {
     return {
+      raceId: this.id,
       mode: this.mode,
       status: this.status,
       durationSeconds: this.durationSeconds,
@@ -329,11 +365,13 @@ export class RaceEngine {
     };
   }
 
-  getResults(now = Date.now()) {
+  getResults(now = this.clock()) {
     const snapshot = this.getSnapshot(now);
 
     const ranking = [...snapshot.players].sort((a, b) => {
       if (this.mode === "versus") {
+        if (a.id === this.winnerId) return -1;
+        if (b.id === this.winnerId) return 1;
         return (
           b.competitionScore - a.competitionScore ||
           b.correct - a.correct ||
@@ -350,13 +388,14 @@ export class RaceEngine {
     // In single-player, this is the player's result,
     // not a claim that they beat another competitor.
     const winner =
-      this.mode === "versus" && ranking.length === 2
-        ? ranking[0]
+      this.mode === "versus" && this.winnerId !== null
+        ? snapshot.players.find(player => player.id === this.winnerId)
         : null;
 
     return {
       ...snapshot,
       winner,
+      winnerId: this.winnerId,
       ranking,
       endReason: this.endReason,
     };

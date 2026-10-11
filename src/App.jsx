@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import LearnScreen, { LESSONS } from './components/LearnScreen.jsx';
+import LearnScreen from './components/LearnScreen.jsx';
 import RaceScreen from './components/RaceScreen.jsx';
 import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
@@ -11,7 +11,6 @@ import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
 const TEST_SEQUENCE = ['A', 'B', 'L', 'A', 'L', 'B', 'L', 'A', 'B', 'L', 'B', 'A'];
-const SUPPORTED_LESSONS = LESSONS.filter(lesson => ['A', 'B', 'L'].includes(lesson.letter));
 
 function asResultPlayer(player, snapshot) {
   return {
@@ -135,17 +134,17 @@ export default function App() {
         </div>
         <HeroLens />
         <div className="sd-feature-grid">
-          <article className="sd-feature glass"><PixelSprite name="A" scale={4} /><h3>Learn</h3><p>Guided letters, quizzes and self-guided handshape practice.</p></article>
+          <article className="sd-feature glass"><PixelSprite name="A" scale={4} /><h3>Learn</h3><p>Guided letters, camera-verified practice and knowledge checks.</p></article>
           <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>60 seconds to complete the sequence. Five hearts.</p></article>
           <article className="sd-feature glass"><PixelSprite name="bolt" scale={5} /><h3>Duo</h3><p>Two webcams, one shared sequence, real-time competition.</p></article>
         </div>
-        <p className="sd-hint">Live recognition currently supports A, B and L. Learning practice is self-assessed.</p>
+        <p className="sd-hint">Live recognition currently supports A, B and L. Hold each sign steadily to complete camera practice.</p>
       </section>}
 
       {screen === 'learn' && <section className="sd-learn">
         <button className="sd-link" onClick={goHome}>Back to menu</button>
         <h1 className="sd-page-title">Sign lessons</h1>
-        <LearnScreen lessons={SUPPORTED_LESSONS} onFinish={() => {}} />
+        <LearnScreen />
         <button className="sd-button sd-button-secondary sd-after-learn" onClick={() => setScreen('setup')}>Ready to race?</button>
       </section>}
 

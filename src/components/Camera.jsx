@@ -8,7 +8,12 @@ import useHandTracking from '../hooks/useHandTracking.js'
  * @param {string | undefined} deviceId  Optional camera id for two-player mode
  * @param {(landmarks: {x:number,y:number,z:number}[] | null) => void} onLandmarks
  */
-export default function Camera({ deviceId, onLandmarks }) {
+export default function Camera({ deviceId, onLandmarks, onStatus }) {
+  // A device change gets fresh state and fully tears down the previous session.
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} />
+}
+
+function CameraSession({ deviceId, onLandmarks, onStatus }) {
   const videoRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraLoading, setCameraLoading] = useState(true)
@@ -17,10 +22,7 @@ export default function Camera({ deviceId, onLandmarks }) {
   useEffect(() => {
     let cancelled = false
     let stream
-
-    setCameraReady(false)
-    setCameraLoading(true)
-    setCameraError(null)
+    const video = videoRef.current
 
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -51,7 +53,6 @@ export default function Camera({ deviceId, onLandmarks }) {
           return
         }
 
-        const video = videoRef.current
         if (!video) {
           stream.getTracks().forEach((track) => track.stop())
           return
@@ -65,6 +66,7 @@ export default function Camera({ deviceId, onLandmarks }) {
           setCameraLoading(false)
         }
       } catch (err) {
+        stream?.getTracks().forEach((track) => track.stop())
         if (!cancelled) {
           const denied = err?.name === 'NotAllowedError'
           setCameraError(
@@ -77,11 +79,11 @@ export default function Camera({ deviceId, onLandmarks }) {
       }
     }
 
-    startCamera()
+    // Async startup also allows StrictMode cleanup before requesting a stream.
+    Promise.resolve().then(() => { if (!cancelled) startCamera() })
 
     return () => {
       cancelled = true
-      const video = videoRef.current
       if (video) {
         video.srcObject = null
       }
@@ -107,6 +109,10 @@ export default function Camera({ deviceId, onLandmarks }) {
 
   const error = cameraError || modelError
   const loading = !error && (cameraLoading || (cameraReady && !modelReady))
+
+  useEffect(() => {
+    onStatus?.({ ready: cameraReady && modelReady && !error, error })
+  }, [cameraReady, modelReady, error, onStatus])
 
   let statusMessage = ''
   if (cameraLoading) {

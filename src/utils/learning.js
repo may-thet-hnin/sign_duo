@@ -2,7 +2,7 @@ import { SUPPORTED_SIGNS, STARTER_SIGNS } from '../recognition/config.js';
 import { COURSE_LESSONS } from './lessonContent.js';
 export const PROGRESS_KEY = 'sign-duo-learning-v1';
 export const emptyProgress = () => ({
-  version: 1, position: 0, practiced: [], mastered: [], answers: [],
+  version: 1, position: 0, practiced: [], skipped: [], mastered: [], answers: [],
   completed: false, completions: 0, successfulAttempts: 0,
 });
 
@@ -11,25 +11,30 @@ export function parseProgress(raw, lesson = COURSE_LESSONS[0]) {
     const saved = JSON.parse(raw);
     if (saved?.version !== 1) return emptyProgress();
     // Recover only internally consistent checkpoints, including corrupt storage.
-    const practiced = [];
+    // Each sign is either camera-practiced or skipped for now; stop at the first
+    // sign that is neither.
+    const practiced = [], skipped = [];
+    const has = (list, letter) => Array.isArray(list) && list.includes(letter);
     for (const letter of lesson.signs) {
-      if (!Array.isArray(saved.practiced) || !saved.practiced.includes(letter)) break;
-      practiced.push(letter);
+      if (has(saved.practiced, letter)) practiced.push(letter);
+      else if (has(saved.skipped, letter)) skipped.push(letter);
+      else break;
     }
+    const passed = practiced.length + skipped.length;
     // Stop at the first invalid answer; filtering would shift later answers
     // onto the wrong quiz question and allow a corrupt checkpoint to advance.
     const answers = [];
-    if (practiced.length === lesson.signs.length && Array.isArray(saved.answers)) {
+    if (passed === lesson.signs.length && Array.isArray(saved.answers)) {
       for (const answer of saved.answers.slice(0, lesson.quiz.length)) {
         if (!lesson.signs.includes(answer)) break;
         answers.push(answer);
       }
     }
-    const maxPosition = practiced.length === lesson.signs.length ? lesson.practiceActivities + answers.length : practiced.length * 2 + 1;
+    const maxPosition = passed === lesson.signs.length ? lesson.practiceActivities + answers.length : passed * 2 + 1;
     const position = Number.isInteger(saved.position) ? Math.max(0, Math.min(saved.position, maxPosition, lesson.activityCount)) : 0;
-    const completed = practiced.length === lesson.signs.length && answers.length === lesson.quiz.length && position === lesson.activityCount;
+    const completed = passed === lesson.signs.length && answers.length === lesson.quiz.length && position === lesson.activityCount;
     return {
-      ...emptyProgress(), practiced, answers, position, completed,
+      ...emptyProgress(), practiced, skipped, answers, position, completed,
       mastered: SUPPORTED_SIGNS.learning.filter(letter => practiced.includes(letter) || (Array.isArray(saved.mastered) && saved.mastered.includes(letter))),
       completions: Number.isInteger(saved.completions) ? Math.max(0, saved.completions) : 0,
       successfulAttempts: Number.isInteger(saved.successfulAttempts) ? Math.max(practiced.length, saved.successfulAttempts) : practiced.length,
@@ -42,6 +47,15 @@ export function recordPractice(progress, letter, lesson = COURSE_LESSONS[0]) {
   if (progress.position >= lesson.practiceActivities || progress.position % 2 !== 1 || letter !== expected || progress.practiced.includes(letter)) return progress;
   return { ...progress, practiced: [...progress.practiced, letter],
     mastered: [...new Set([...progress.mastered, letter])], successfulAttempts: progress.successfulAttempts + 1 };
+}
+
+// "Skip for now" on a camera practice: move on without camera credit. The sign
+// is remembered as skipped so the lesson can point the learner back to it.
+export function skipPractice(progress, lesson = COURSE_LESSONS[0]) {
+  const sign = lesson.signs[Math.floor(progress.position / 2)];
+  if (progress.position >= lesson.practiceActivities || progress.position % 2 !== 1 ||
+    progress.practiced.includes(sign) || progress.skipped.includes(sign)) return progress;
+  return { ...progress, skipped: [...progress.skipped, sign], position: progress.position + 1 };
 }
 
 export function recordAnswer(progress, answer, lesson = COURSE_LESSONS[0]) {

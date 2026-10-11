@@ -174,3 +174,25 @@ test('No checks both finger paths together, even when both eventually reach the 
 });
 
 function clampProgress(value) { return Math.max(0, Math.min(1, value)); }
+
+test('Yes uses world-landmark depth, so a normal nod counts even when image depth is underestimated', () => {
+  // MediaPipe image z often reads a fraction of true depth; world landmarks do not.
+  const nodFrames = (degrees, { translate = 0 } = {}) => Array.from({ length: 60 }, (_, k) => {
+    const wave = Math.sin(Math.PI * Math.min(1, Math.max(0, (k - 15) / 21)));
+    const options = { nod: wave * degrees * Math.PI / 180, dy: wave * translate };
+    const truth = cameraPoints(pose('FIST'), options);
+    return { now: k * 33, image: truth.map(p => ({ ...p, z: p.z * .3 })), world: truth.map(p => ({ x: p.x - .5, y: p.y - .6, z: p.z })) };
+  });
+  const words = (frames, useWorld) => {
+    const d = new DynamicGestureRecognizer();
+    return frames.map(f => d.update(f.image, f.now, useWorld ? f.world : null)).filter(r => r.isNew).map(r => r.letter);
+  };
+  for (const degrees of [25, 35]) {
+    assert.deepEqual(words(nodFrames(degrees), true), ['YES'], `${degrees}° nod with world depth`);
+    assert.deepEqual(words(nodFrames(degrees), false), [], 'squashed image depth alone hides the bend');
+  }
+  assert.deepEqual(words(nodFrames(0, { translate: 1 }), true), [], 'moving an unbent fist is not a nod');
+  const d = new DynamicGestureRecognizer();
+  const progress = nodFrames(30).map(f => d.update(f.image, f.now, f.world)).find(r => r.motion?.peakDegrees >= 20);
+  assert.equal(progress.motion.depth, 'world', 'diagnostics report the bend and its depth source');
+});

@@ -56,6 +56,18 @@ function matchesStroke(raw, smooth, deadband) {
   return band === bands.length && steps >= 3 && Math.abs(extent) / travel >= .65;
 }
 
+// Wrist-to-knuckle orientation in the camera's y-z plane. MediaPipe's
+// image z underestimates depth: when it reads half the true depth, a 25° nod
+// measures under 10° and YES never completes. World landmarks (metres, axes
+// aligned with the camera) keep true depth, so YES prefers them.
+const validPoints = points => Array.isArray(points) && points.length === 21 &&
+  points.every(p => p && [p.x, p.y, p.z].every(Number.isFinite));
+function orientation(p) {
+  const k = [5, 9, 13, 17].reduce((sum, i) => ({ x: sum.x + p[i].x / 4, y: sum.y + p[i].y / 4, z: sum.z + p[i].z / 4 }), { x: 0, y: 0, z: 0 });
+  const width = Math.hypot(p[5].x - p[17].x, p[5].y - p[17].y, p[5].z - p[17].z) || 1;
+  return { nod: (k.y - p[0].y) / width, nodAngle: Math.atan2(k.z - p[0].z, p[0].y - k.y) };
+}
+
 // Dynamic handshapes need room for natural curl and tracking variation.
 // Keep these tolerances local: static alphabet classification is unchanged.
 function classify(f) {
@@ -76,13 +88,13 @@ function classify(f) {
 
 // Per-camera trajectories retain every observed motion frame for up to 2.4 s.
 export class DynamicGestureRecognizer {
-  constructor() { this.filter = new LandmarkFilter(); this.reset(); }
+  constructor() { this.filter = new LandmarkFilter(); this.worldFilter = new LandmarkFilter(); this.reset(); }
   reset(preserveLock = false) {
     this.lockedWord = preserveLock ? this.lockedWord : null;
     this.history = []; this.state = null; this.lastAt = null; this.releaseAt = null; this.invalidAt = null;
-    this.filter.reset();
+    this.filter.reset(); this.worldFilter.reset();
   }
-  update(points, now) {
+  update(points, now, world = null) {
     const raw = handFeatures(points);
     if (!raw || !Number.isFinite(now)) { this.reset(); return pending(); }
     if (this.lastAt !== null && (now <= this.lastAt || now - this.lastAt > RECOGNITION_CONFIG.maxGapMs)) this.reset(true);
@@ -116,16 +128,19 @@ export class DynamicGestureRecognizer {
     }
     this.invalidAt = null;
 
-    const f = handFeatures(this.filter.apply(points, now)) ?? raw;
+    const smoothed = this.filter.apply(points, now);
+    const f = handFeatures(smoothed) ?? raw;
     const indexGap = f.distance(4, 8), middleGap = f.distance(4, 12);
-    const sample = { now, x: f.wrist.x, y: f.wrist.y, width: f.width,
-      nod: (f.knuckleY - f.wrist.y) / f.width,
-      nodAngle: Math.atan2(f.knuckleZ - f.wrist.z, f.wrist.y - f.knuckleY),
+    const hasWorld = validPoints(world);
+    if (!hasWorld) this.worldFilter.reset();
+    const turn = orientation(hasWorld ? this.worldFilter.apply(world, now) : smoothed);
+    const rawTurn = orientation(hasWorld ? world : points);
+    const sample = { now, x: f.wrist.x, y: f.wrist.y, width: f.width, depth: hasWorld ? 'world' : 'image',
+      nod: turn.nod, nodAngle: turn.nodAngle,
       side: (f.knuckleX - f.wrist.x) / f.width,
       gap: (indexGap + middleGap) / 2, indexGap, middleGap,
       // Unfiltered values: smoothing would turn a tracking glitch into motion.
-      rawX: raw.wrist.x, rawY: raw.wrist.y, rawNod: (raw.knuckleY - raw.wrist.y) / raw.width,
-      rawNodAngle: Math.atan2(raw.knuckleZ - raw.wrist.z, raw.wrist.y - raw.knuckleY),
+      rawX: raw.wrist.x, rawY: raw.wrist.y, rawNod: rawTurn.nod, rawNodAngle: rawTurn.nodAngle,
       rawIndexGap: raw.distance(4, 8), rawMiddleGap: raw.distance(4, 12) };
     this.history.push(sample);
     this.history = this.history.filter(s => now - s.now <= 2400).slice(-256);
@@ -133,6 +148,8 @@ export class DynamicGestureRecognizer {
       if (word === 'NO' && !noOpen) return pending();
       this.state = { word, start: sample, startSamples: 0, endpoints: 0, movementSamples: 0, travel: 0, bent: false, peak: 0, peakIndex: 0 };
     }
+    // Do not compare world and image orientation within one motion.
+    if (this.state.start.depth !== sample.depth) { this.state = null; this.history = [sample]; return pending(word); }
     const s = this.state, a = s.start;
     const dx = (sample.x - a.x) / a.width, dy = (sample.y - a.y) / a.width;
     const previous = this.history.at(-2);
@@ -156,6 +173,7 @@ export class DynamicGestureRecognizer {
       if (s.travel >= .025) { s.movementSamples++; s.travel = 0; }
     }
     let endpoint;
+    let motion = null;
     let trajectoryValid;
     let progress;
     let phase = 'start';
@@ -176,15 +194,18 @@ export class DynamicGestureRecognizer {
     } else if (word === 'YES') {
       // Fist nod measured relative to wrist: translating a stationary fist
       // vertically cannot satisfy this. Require bend down, then return.
+      // About 17° of wrist bend is enough. A knock may move the forearm a
+      // little too, so allow some wrist travel; the fist must still bend.
       const bend = Math.abs(angleDelta(sample.nodAngle, a.nodAngle));
-      if (Math.hypot(dx, dy) > .8 || Math.abs(sample.side - a.side) > .4) { this.state = null; this.history = []; return pending(); }
-      if (sample.nod - a.nod > .08 && bend > .4) s.bent = true;
+      if (Math.hypot(dx, dy) > 1.2 || Math.abs(sample.side - a.side) > .4) { this.state = null; this.history = []; return pending(); }
+      if (bend > .3) s.bent = true;
       if (bend > s.peak) { s.peak = bend; s.peakIndex = this.history.length - 1; }
       const angles = this.history.map(frame => angleDelta(frame.nodAngle, a.nodAngle));
       const rawAngles = this.history.map(frame => angleDelta(frame.rawNodAngle, a.rawNodAngle));
       trajectoryValid = s.bent && matchesStroke(rawAngles.slice(0, s.peakIndex + 1), angles.slice(0, s.peakIndex + 1), .03) &&
         matchesStroke(rawAngles.slice(s.peakIndex), angles.slice(s.peakIndex), .03);
-      progress = .25 + .35 * clamp(bend / .4);
+      progress = .25 + .35 * clamp(bend / .3);
+      motion = { bendDegrees: Math.round(bend * 180 / Math.PI), peakDegrees: Math.round(s.peak * 180 / Math.PI), depth: sample.depth };
       if (bend > .15) phase = 'bending';
       if (s.bent) {
         progress = .6 + .3 * clamp((s.peak - bend) / s.peak);
@@ -212,6 +233,6 @@ export class DynamicGestureRecognizer {
       return { letter: word, candidate: word, status: 'stable', progress: 1, isNew: true,
         lockedLetter: word, quality: 1, simplified: word === 'HELLO', phase: 'complete', kind: 'dynamic' };
     }
-    return pending(word, progress, phase);
+    return { ...pending(word, progress, phase), ...(motion && { motion }) };
   }
 }

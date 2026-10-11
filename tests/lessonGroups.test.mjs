@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { COURSE_LESSONS } from '../src/utils/lessonContent.js';
 import { SUPPORTED_SIGNS } from '../src/recognition/config.js';
 import { emptyProgress, emptyCourseProgress, parseCourseProgress, updateLessonProgress,
-  recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress } from '../src/utils/learning.js';
+  recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress, skipPractice, parseProgress } from '../src/utils/learning.js';
 
 function completeLesson(p, lesson) {
   for (const sign of lesson.signs) {
@@ -123,4 +123,40 @@ test('display progress accepts only current validated events; words use motion m
     assert.equal(recognitionProgress({ ...completed, isNew: false },target,'current').complete, false);
     assert.deepEqual(recognitionProgress({ candidate: 'OTHER', status: 'tentative', progress: .9 }, target), { progress: 0, complete: false });
   }
+});
+
+test('skip for now advances past a stuck practice without camera credit and survives a reload', () => {
+  for (const lesson of COURSE_LESSONS) {
+    const [first, second] = lesson.signs;
+    let p = advanceProgress(emptyProgress(), lesson);
+    assert.equal(skipPractice(emptyProgress(), lesson).position, 0, 'guided steps cannot be skipped');
+    p = skipPractice(p, lesson);
+    assert.equal(p.position, 2, `skipping ${first} opens ${second}`);
+    assert.deepEqual(p.skipped, [first]);
+    assert.deepEqual(p.practiced, []);
+    assert.deepEqual(p.mastered, [], 'skipped signs are not mastered');
+    assert.equal(p.successfulAttempts, 0);
+    assert.equal(skipPractice(p, lesson), p, 'only a practice step can be skipped');
+    assert.deepEqual(parseProgress(JSON.stringify(p), lesson), p);
+
+    // Practice the rest, answer the quiz: the lesson completes and remembers the skip.
+    for (const sign of lesson.signs.slice(1)) {
+      p = advanceProgress(p, lesson);
+      p = recordPractice(p, sign, lesson);
+      p = advanceProgress(p, lesson);
+    }
+    for (const answer of lesson.quiz) p = advanceProgress(recordAnswer(p, answer, lesson), lesson);
+    assert.equal(p.completed, true);
+    assert.deepEqual(p.skipped, [first]);
+    assert.deepEqual(parseProgress(JSON.stringify(p), lesson), p);
+    assert.deepEqual(replayProgress(p).skipped, [], 'replaying starts the skipped sign again');
+  }
+});
+
+test('saved progress cannot claim a sign that was neither practiced nor skipped', () => {
+  const lesson = COURSE_LESSONS[0];
+  const saved = { ...emptyProgress(), position: 6, practiced: ['A'], skipped: ['L'] };
+  const parsed = parseProgress(JSON.stringify(saved), lesson);
+  assert.equal(parsed.position, 3, 'resume at the missing B practice');
+  assert.deepEqual(parsed.skipped, []);
 });

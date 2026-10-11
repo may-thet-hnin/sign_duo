@@ -70,12 +70,12 @@ function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetS
     recognitionCallback.current?.({ status: 'loading', letter: null, progress: 0 })
     let ready = false
     let lastFrame = performance.now()
-    controllerRef.current.feed = ({ landmarks, handedness }) => {
+    controllerRef.current.feed = ({ landmarks, handedness, world }) => {
       lastFrame = performance.now()
       if (ready && activeRef.current) {
         const video = videoRef.current
         const aspectRatio = video?.videoWidth && video?.videoHeight ? video.videoWidth / video.videoHeight : 1
-        controller.process(landmarks, lastFrame, { aspectRatio, handedness })
+        controller.process(landmarks, lastFrame, { aspectRatio, handedness, world })
       }
     }
     requestModel().then(() => { if (!cancelled) { ready = true; setRecognitionReady(true) } }).catch(error => {

@@ -38,7 +38,7 @@ export class RecognitionController {
     const smoothed = this.smoother.update(null, now, status !== 'no-hand', status !== 'tracking-paused');
     this.emit({ ...smoothed, status, timestamp: now, handDetected: status !== 'no-hand', top: [], raw: null });
   }
-  async process(points, now, { aspectRatio = 1, handedness = null } = {}) {
+  async process(points, now, { aspectRatio = 1, handedness = null, world = null } = {}) {
     if (this.disposed) return;
     if (!points) { this.invalidate('no-hand', now); return; }
     if (points.some(p => !p || p.x <= 0 || p.x >= 1 || p.y <= 0 || p.y >= 1)) { this.invalidate('out-of-frame', now); return; }
@@ -48,7 +48,7 @@ export class RecognitionController {
     if (!metric) { this.invalidate('unknown', now); return; }
     if (WORD_SIGNS.includes(this.targetSign)) {
       this.lastAt = now;
-      const result = this.dynamic.update(metric, now);
+      const result = this.dynamic.update(metric, now, world);
       const allowed = !result.letter || this.allowlist.includes(result.letter);
       this.emit({ ...result, ...(allowed ? {} : { letter: null, isNew: false, status: 'unknown' }),
         timestamp: now, handDetected: true, challengeId: this.challengeId,

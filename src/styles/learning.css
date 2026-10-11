@@ -36,7 +36,9 @@
 .learn-readouts strong { color: var(--gold); }
 .learn-camera .sd-camera__frame { aspect-ratio: 16 / 9; }
 .learn-camera .sd-camera__video, .learn-camera .sd-hand-overlay { object-fit: contain; }
-.learn-feedback { min-height: 76px; display: flex; align-items: center; padding: 16px; background: rgba(19, 11, 58, .7); border: 1px solid rgba(255,255,255,.35); border-radius: 12px; font-size: 20px; }
+/* Room for two lines, so live messages of different lengths do not move the buttons below. */
+.learn-feedback { min-height: calc(3em + 34px); line-height: 1.5; display: flex; align-items: center; padding: 16px; background: rgba(19, 11, 58, .7); border: 1px solid rgba(255,255,255,.35); border-radius: 12px; font-size: 20px; }
+@media (max-width: 560px) { .learn-feedback { min-height: calc(4.5em + 34px); } }
 .learn-feedback[data-success='true'] { border-color: var(--mint); color: var(--mint); }
 .learn-success { border-color: var(--mint); box-shadow: 0 0 0 2px var(--mint), 0 20px 40px rgba(19,11,58,.5); }
 .learn-actions > button { flex: 1 1 170px; min-height: 52px; }

@@ -42,9 +42,10 @@ function releaseLandmarker(landmarker) {
 
 function toFrame(result) {
   const hand = result.landmarks?.[0]
-  if (!hand) return { landmarks: null, handedness: null }
+  if (!hand) return { landmarks: null, handedness: null, world: null }
   const handedness = (result.handedness ?? result.handednesses)?.[0]?.[0]?.categoryName ?? null
-  return { landmarks: hand.map(({ x, y, z }) => ({ x, y, z })), handedness }
+  const world = result.worldLandmarks?.[0]?.map(({ x, y, z }) => ({ x, y, z })) ?? null
+  return { landmarks: hand.map(({ x, y, z }) => ({ x, y, z })), handedness, world }
 }
 
 /**
@@ -53,7 +54,7 @@ function toFrame(result) {
  * tracking loop does not re-render the component tree.
  *
  * @param {React.RefObject<HTMLVideoElement>} videoRef
- * @param {{ enabled?: boolean, onFrame?: (frame: { landmarks: {x:number,y:number,z:number}[] | null, handedness: 'Left' | 'Right' | null }) => void }} options
+ * @param {{ enabled?: boolean, onFrame?: (frame: { landmarks: {x:number,y:number,z:number}[] | null, handedness: 'Left' | 'Right' | null, world: {x:number,y:number,z:number}[] | null }) => void }} options
  */
 export default function useHandTracking(videoRef, options = {}) {
   const { enabled = true, onFrame } = options

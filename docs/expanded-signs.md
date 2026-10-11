@@ -69,8 +69,12 @@ frames may fall outside the two-finger coordination limit.
 
 - **YES:** curled fist with tucked thumb; knuckles move downward relative to the
   wrist and return. Translating an unchanged fist up and down does not count.
-  A bend of about 23 degrees with downward knuckle movement is sufficient; a
-  deep 60-degree bend is not required. The thumb can rest across the fingers.
+  A wrist bend of about 17 degrees is sufficient; a deep 60-degree bend is not
+  required. The thumb can rest across the fingers. The bend is measured from
+  MediaPipe world landmarks (metres, true depth) when available. Image z often
+  reads a fraction of real depth, which hid normal nods entirely. The wrist may
+  move up to 1.2 palm widths during a knock, but an unbent fist never counts.
+  The DEV diagnostics panel shows the live bend and peak angle.
 - **NO:** index and middle fingers start extended together with a gap to the thumb,
   then both close toward the thumb while the other fingers stay folded. A one-finger
   pinch does not count. Holding the closed pose does not repeat; reopen both fingers

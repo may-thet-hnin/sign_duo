@@ -7,6 +7,7 @@ export default function RecognitionDebug({ result, target }) {
         Hand: result.handDetected ? result.handedness ? `detected (${result.handedness})` : 'detected' : 'absent',
         'Raw class': result.raw, Stable: result.letter, State: result.status,
         Agreement: `${Math.round((result.agreement || 0) * 100)}%`,
+        ...(result.motion && { 'Wrist bend': `${result.motion.bendDegrees}° now · ${result.motion.peakDegrees}° peak (needs ~17°, ${result.motion.depth} depth)` }),
         'Inference ms': result.latencyMs?.toFixed(1) }).map(([key, value]) =>
         <div key={key}><dt>{key}</dt><dd>{value ?? '—'}</dd></div>)}
     </dl>

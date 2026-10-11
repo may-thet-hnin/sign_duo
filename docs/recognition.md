@@ -1,5 +1,9 @@
 # Recognition iteration 1: webcam validation required
 
+**Update:** See [competition fixes](competition-fixes.md) for current behavior.
+The architecture below describes the initial ONNX-only iteration. B now also has an
+explicitly labeled geometry path, and different stable letters do not require release.
+
 ## Scope and findings
 
 This iteration implements model integration and shared stability filtering only.

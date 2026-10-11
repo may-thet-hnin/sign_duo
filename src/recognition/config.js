@@ -8,3 +8,4 @@ export const RECOGNITION_CONFIG = Object.freeze({
   agreement: 0.8, durationMs: 900, maxGapMs: 350, releaseMs: 400,
   intervalMs: 80,
 });
+export const RACE_DURATIONS = Object.freeze([30, 60, 90, 120]);

@@ -2,7 +2,8 @@ export function summarizeAttempt(samples, expected, startedAt, endedAt, target =
   const stable = samples.filter(s => s.status === 'stable');
   const correct = samples.filter(s => expected !== 'UNKNOWN' && s.raw === expected);
   const first = stable.find(s => expected !== 'UNKNOWN' && s.letter === expected);
-  return { samples: samples.length, durationMs: endedAt - startedAt,
+  const methods = [...new Set(samples.map(s => s.method).filter(Boolean))];
+  return { samples: samples.length, durationMs: endedAt - startedAt, methods,
     rawCorrectFraction: expected === 'UNKNOWN' || !samples.length ? null : correct.length / samples.length,
     stableFraction: samples.length ? stable.length / samples.length : null,
     acceptedCorrect: Boolean(first),

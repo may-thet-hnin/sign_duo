@@ -6,7 +6,7 @@ Sign Duo teaches users the letters of ASL and checks accuracy using computer vis
 - JavaScript/React
 - Node.js
 - [Google Media Pipe](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) for the computer vision
-- Experimental landmark geometry rules for A, B, and L (`src/utils/recognizeLetter.js`). The app does not currently load an ASL MLP classifier.
+- Local ONNX Runtime Web ASL landmark MLP, plus an experimental B geometry compatibility path. Only A/B/L are enabled.
 - [Camo App](https://camo.com/) for the second webcam (1v1 "signs per minute" contest)
 
 
@@ -23,13 +23,13 @@ The UI is a deliberate blend of two ideas:
 
 Files: `src/index.css` (tokens + scenery), `src/styles/glass.css` (primitives), `src/App.css` (screens).
 Fonts load from Google Fonts in `index.html`; self-host them if you need offline use. `prefers-reduced-motion` is respected.
-Game logic, recognition and the race engine are unchanged.
+Race scoring and the pixel/glass design are preserved.
 
 ## Learning Mode
 
 Lesson 1 teaches A, B, and L through guided instruction, photographic references,
-live camera practice, and three knowledge checks. Camera practice requires 1.5
-seconds of consecutive matching MediaPipe/classifier predictions. Progress is saved
+live camera practice, and three knowledge checks. Camera practice requires about
+900 ms of matching predictions plus sample/agreement validation. Progress is saved
 in this browser's localStorage; completed lessons can be replayed.
 
 Run `npm run dev`, then choose **Start learning**. Run `npm test`, `npm run lint`,
@@ -37,4 +37,11 @@ and `npm run build` for automated checks.
 
 See [Learning Mode implementation and testing report](docs/learning-mode.md) for
 recognition limitations, file changes, validation results, and the manual test checklist.
+
+## Competition
+
+Choose 30/60/90/120 seconds before starting (default 60). The countdown begins after
+all cameras and recognition models are ready. Different letters transition naturally;
+repeated identical letters require a brief release. See [competition fixes and browser
+checklist](docs/competition-fixes.md) for the B compatibility path and validation limits.
 

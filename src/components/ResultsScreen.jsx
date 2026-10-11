@@ -34,7 +34,7 @@ function pickWinner(a, b, winnerId) {
   return null; // tie
 }
 
-export default function ResultsScreen({ players, winnerId, onRematch, onHome }) {
+export default function ResultsScreen({ players, winnerId, onRematch, onHome, durationSeconds }) {
   const [a, b] = players;
   const winner = pickWinner(a, b, winnerId);
   const loser = winner ? (winner.id === a.id ? b : a) : null;
@@ -65,6 +65,7 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome }) 
     <div className="rs" aria-label="Race results" role="region">
       <section className="rs__banner glass" data-tie={!winner} aria-live="polite">
         <Trophy />
+        {durationSeconds && <p>{durationSeconds}-second race</p>}
         <p className="rs__eyebrow">{winner ? "Winner" : "Result"}</p>
         <h1 className="rs__title">{winner ? winner.name : "It's a tie!"}</h1>
         <p className="rs__sub">

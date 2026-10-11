@@ -8,35 +8,65 @@ const WASM_URL =
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
 
-function toSimpleLandmarks(hand) {
-  return hand.map((point) => ({
-    x: point.x,
-    y: point.y,
-    z: point.z,
-  }))
+// The WASM runtime loads once. Landmarkers are pooled: each camera needs its
+// own instance (VIDEO mode tracks across frames), but lesson steps that mount
+// a new camera reuse an idle one instead of rebuilding it.
+let visionPromise = null
+const idleLandmarkers = []
+const MAX_IDLE = 2
+
+async function acquireLandmarker() {
+  const pooled = idleLandmarkers.pop()
+  if (pooled) return pooled
+  visionPromise ??= FilesetResolver.forVisionTasks(WASM_URL).catch((error) => {
+    visionPromise = null
+    throw error
+  })
+  const vision = await visionPromise
+  const create = (delegate) => HandLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: MODEL_URL, delegate },
+    runningMode: 'VIDEO',
+    numHands: 1,
+  })
+  try {
+    return await create('GPU')
+  } catch {
+    return create('CPU')
+  }
+}
+
+function releaseLandmarker(landmarker) {
+  if (idleLandmarkers.length < MAX_IDLE) idleLandmarkers.push(landmarker)
+  else landmarker.close()
+}
+
+function toFrame(result) {
+  const hand = result.landmarks?.[0]
+  if (!hand) return { landmarks: null, handedness: null }
+  const handedness = (result.handedness ?? result.handednesses)?.[0]?.[0]?.categoryName ?? null
+  return { landmarks: hand.map(({ x, y, z }) => ({ x, y, z })), handedness }
 }
 
 /**
- * Runs MediaPipe Hand Landmarker on a webcam <video> element.
+ * Runs MediaPipe Hand Landmarker on a webcam <video> element, once per new
+ * video frame. Results go to `onFrame` without React state, so a 30 fps
+ * tracking loop does not re-render the component tree.
  *
  * @param {React.RefObject<HTMLVideoElement>} videoRef
- * @param {{ enabled?: boolean, onLandmarks?: (landmarks: {x:number,y:number,z:number}[] | null) => void }} options
+ * @param {{ enabled?: boolean, onFrame?: (frame: { landmarks: {x:number,y:number,z:number}[] | null, handedness: 'Left' | 'Right' | null }) => void }} options
  */
 export default function useHandTracking(videoRef, options = {}) {
-  const { enabled = true, onLandmarks } = options
+  const { enabled = true, onFrame } = options
 
-  const [landmarks, setLandmarks] = useState(null)
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState(null)
 
   const landmarkerRef = useRef(null)
-  const rafRef = useRef(0)
-  const lastVideoTimeRef = useRef(-1)
-  const onLandmarksRef = useRef(onLandmarks)
+  const onFrameRef = useRef(onFrame)
 
   useEffect(() => {
-    onLandmarksRef.current = onLandmarks
-  }, [onLandmarks])
+    onFrameRef.current = onFrame
+  }, [onFrame])
 
   useEffect(() => {
     if (!enabled) {
@@ -44,65 +74,8 @@ export default function useHandTracking(videoRef, options = {}) {
     }
 
     let cancelled = false
-
-    async function createLandmarker(vision, delegate) {
-      return HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: MODEL_URL,
-          delegate,
-        },
-        runningMode: 'VIDEO',
-        numHands: 1,
-      })
-    }
-
-    async function init() {
-      try {
-        const vision = await FilesetResolver.forVisionTasks(WASM_URL)
-
-        let landmarker
-        try {
-          landmarker = await createLandmarker(vision, 'GPU')
-        } catch {
-          landmarker = await createLandmarker(vision, 'CPU')
-        }
-
-        if (cancelled) {
-          landmarker.close()
-          return
-        }
-
-        landmarkerRef.current = landmarker
-        setIsReady(true)
-        setError(null)
-      } catch (err) {
-        if (!cancelled) {
-          setIsReady(false)
-          setError(
-            err?.message ||
-              'Failed to load the MediaPipe hand tracking model.',
-          )
-        }
-      }
-    }
-
-    init()
-
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(rafRef.current)
-
-      if (landmarkerRef.current) {
-        landmarkerRef.current.close()
-        landmarkerRef.current = null
-      }
-    }
-  }, [enabled])
-
-  useEffect(() => {
-    if (!enabled || !isReady) {
-      return undefined
-    }
+    let raf = 0
+    let lastVideoTime = -1
 
     const detectFrame = () => {
       const video = videoRef.current
@@ -111,33 +84,46 @@ export default function useHandTracking(videoRef, options = {}) {
       if (
         video &&
         landmarker &&
-        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        video.currentTime !== lastVideoTime
       ) {
-        if (video.currentTime !== lastVideoTimeRef.current) {
-          lastVideoTimeRef.current = video.currentTime
-
-          try {
-            const result = landmarker.detectForVideo(video, performance.now())
-            const hand = result.landmarks?.[0]
-            const nextLandmarks = hand ? toSimpleLandmarks(hand) : null
-
-            setLandmarks(nextLandmarks)
-            onLandmarksRef.current?.(nextLandmarks)
-          } catch {
-            // Skip a bad frame (for example a timestamp glitch) and keep going.
-          }
+        lastVideoTime = video.currentTime
+        try {
+          onFrameRef.current?.(toFrame(landmarker.detectForVideo(video, performance.now())))
+        } catch {
+          // Skip a bad frame (for example a timestamp glitch) and keep going.
         }
       }
 
-      rafRef.current = requestAnimationFrame(detectFrame)
+      raf = requestAnimationFrame(detectFrame)
     }
 
-    rafRef.current = requestAnimationFrame(detectFrame)
+    acquireLandmarker().then((landmarker) => {
+      if (cancelled) {
+        releaseLandmarker(landmarker)
+        return
+      }
+      landmarkerRef.current = landmarker
+      setIsReady(true)
+      setError(null)
+      raf = requestAnimationFrame(detectFrame)
+    }).catch((err) => {
+      if (!cancelled) {
+        setIsReady(false)
+        setError(err?.message || 'Failed to load the MediaPipe hand tracking model.')
+      }
+    })
 
     return () => {
-      cancelAnimationFrame(rafRef.current)
+      cancelled = true
+      cancelAnimationFrame(raf)
+      if (landmarkerRef.current) {
+        releaseLandmarker(landmarkerRef.current)
+        landmarkerRef.current = null
+      }
+      setIsReady(false)
     }
-  }, [enabled, isReady, videoRef])
+  }, [enabled, videoRef])
 
-  return { landmarks, isReady, error }
+  return { isReady, error }
 }

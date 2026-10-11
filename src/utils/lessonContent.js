@@ -1,4 +1,4 @@
-import { SUPPORTED_SIGNS, STARTER_SIGNS, ALPHABET_SIGNS, LESSON_GROUPS } from '../recognition/config.js';
+import { SUPPORTED_SIGNS, ALPHABET_SIGNS, LESSON_GROUPS } from '../recognition/config.js';
 export const REFERENCE_URL = 'https://www.lifeprint.com/asl101/fingerspelling/abc.htm';
 
 // Photographic references from ASL University, never generated handshapes.
@@ -66,12 +66,60 @@ export const ALPHABET_LESSONS = [
     mistake: 'The thumb must be open. A tucked thumb resembles I.',
     description: 'Thumb and little finger extended, with three middle fingers folded.',
   },
+  {
+    id: 'e', letter: 'E', name: 'Fingertips bent over the thumb',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/e.jpg',
+    steps: ['Bend all four fingers at the middle knuckles so the fingertips point down.', 'Tuck your thumb across the palm, underneath the fingertips.', 'Face your palm toward the person watching.'],
+    mistake: 'Keep the thumb below the fingertips. A thumb across the front of a tight fist makes S.',
+    description: 'Four bent fingertips resting above a thumb tucked across the palm.',
+  },
+  {
+    id: 's', letter: 'S', name: 'Fist with thumb across the front',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/s.jpg',
+    steps: ['Curl all four fingers into a closed fist.', 'Lay your thumb across the front of the curled fingers.', 'Face your palm toward the person watching.'],
+    mistake: 'The thumb crosses the front of the fingers. Beside the index finger it makes A.',
+    description: 'A closed fist with the thumb wrapped across the front of the fingers.',
+  },
+  {
+    id: 'm', letter: 'M', name: 'Thumb under three fingers',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/m.jpg',
+    steps: ['Fold the index, middle and ring fingers down over your thumb.', 'Let the thumb tip peek out between the ring and little fingers.', 'Keep the little finger folded.'],
+    mistake: 'Three fingers cover the thumb. Covering it with only two makes N.',
+    description: 'Index, middle and ring fingers folded over the tucked thumb.',
+  },
+  {
+    id: 'n', letter: 'N', name: 'Thumb under two fingers',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/n.jpg',
+    steps: ['Fold the index and middle fingers down over your thumb.', 'Let the thumb tip peek out between the middle and ring fingers.', 'Keep the ring and little fingers folded.'],
+    mistake: 'Only two fingers cover the thumb. Covering it with three makes M.',
+    description: 'Index and middle fingers folded over the tucked thumb.',
+  },
+  {
+    id: 'o', letter: 'O', name: 'Fingertips meet the thumb',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/o.jpg',
+    steps: ['Curve all four fingers together.', 'Bring the fingertips down to touch the thumb tip.', 'Leave a round opening in the middle, like the letter O.'],
+    mistake: 'The fingertips touch the thumb. Leaving a gap makes C.',
+    description: 'Curved fingers touching the thumb tip to form a round O.',
+  },
+  {
+    id: 'f', letter: 'F', name: 'Index and thumb circle',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/f.jpg',
+    steps: ['Touch the tip of your index finger to the tip of your thumb.', 'Extend the middle, ring and little fingers upward.', 'Spread the three raised fingers slightly.'],
+    mistake: 'Keep the other three fingers straight. The same handshape is also the number 9.',
+    description: 'Index finger and thumb forming a circle, with three fingers raised.',
+  },
+  {
+    id: 'r', letter: 'R', name: 'Crossed fingers',
+    image: 'https://www.lifeprint.com/asl101/fingerspelling/oldletters/r.jpg',
+    steps: ['Extend the index and middle fingers.', 'Cross the two raised fingers over each other.', 'Fold the ring and little fingers with the thumb over them.'],
+    mistake: 'The two fingers must cross. Side by side without crossing makes U.',
+    description: 'Index and middle fingers crossed, with the other fingers folded.',
+  },
 ].filter(sign => SUPPORTED_SIGNS.learning.includes(sign.letter)).sort((a, b) => ALPHABET_SIGNS.indexOf(a.letter) - ALPHABET_SIGNS.indexOf(b.letter)).map(sign => ({
-  ...sign, category: 'alphabet', recognitionMethod: STARTER_SIGNS.includes(sign.letter) ? 'onnx-mlp' : 'static-geometry', enabled: true,
+  ...sign, category: 'alphabet', recognitionMethod: 'onnx-mlp', enabled: true,
   modes: ['learning', ...(SUPPORTED_SIGNS.competition.includes(sign.letter) ? ['competition'] : [])],
 }));
 
-export const LESSONS = STARTER_SIGNS.map(letter => ALPHABET_LESSONS.find(sign => sign.letter === letter));
 export const WORD_LESSONS = [
   {
     id: 'hello', letter: 'HELLO', name: 'HELLO · simplified motion practice', simplified: true,
@@ -107,9 +155,6 @@ export const WORD_LESSONS = [
 export function signContent(letter) {
   return [...ALPHABET_LESSONS, ...WORD_LESSONS].find(sign => sign.letter === letter);
 }
-
-// Different order from the guided sequence; the answer is not always option one.
-export const QUIZ_SIGNS = LESSON_GROUPS[0].quiz;
 
 export const COURSE_LESSONS = LESSON_GROUPS.map(lesson => ({
   ...lesson,

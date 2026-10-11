@@ -47,8 +47,10 @@ function drawHand(ctx, landmarks, width, height) {
 /**
  * Canvas overlay that draws 21 hand landmarks and their connections.
  * It is mirrored the same way as the webcam video so points stay aligned.
+ * Drawing is imperative: the parent calls `drawRef.current(landmarks)` from the
+ * tracking loop, so each video frame does not need a React render.
  */
-export default function HandOverlay({ videoRef, landmarks }) {
+export default function HandOverlay({ videoRef, drawRef }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -61,10 +63,15 @@ export default function HandOverlay({ videoRef, landmarks }) {
     const syncSize = () => {
       const nextWidth = video.videoWidth || video.clientWidth
       const nextHeight = video.videoHeight || video.clientHeight
-      if (nextWidth && nextHeight) {
+      if (nextWidth && nextHeight && (canvas.width !== nextWidth || canvas.height !== nextHeight)) {
         canvas.width = nextWidth
         canvas.height = nextHeight
       }
+    }
+
+    const ctx = canvas.getContext('2d')
+    drawRef.current = (landmarks) => {
+      if (ctx) drawHand(ctx, landmarks, canvas.width, canvas.height)
     }
 
     syncSize()
@@ -72,24 +79,11 @@ export default function HandOverlay({ videoRef, landmarks }) {
     window.addEventListener('resize', syncSize)
 
     return () => {
+      drawRef.current = null
       video.removeEventListener('loadedmetadata', syncSize)
       window.removeEventListener('resize', syncSize)
     }
-  }, [videoRef])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) {
-      return
-    }
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) {
-      return
-    }
-
-    drawHand(ctx, landmarks, canvas.width, canvas.height)
-  }, [landmarks])
+  }, [videoRef, drawRef])
 
   return (
     <canvas

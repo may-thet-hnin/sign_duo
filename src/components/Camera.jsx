@@ -5,19 +5,27 @@ import { RecognitionController } from '../recognition/controller.js'
 import { requestModel } from '../recognition/modelClient.js'
 import { releaseCamera } from '../recognition/cameraResources.js'
 
-/**
- * Webcam + MediaPipe hand tracking.
- *
- * @param {string | undefined} deviceId  Optional camera id for two-player mode
- * @param {(landmarks: {x:number,y:number,z:number}[] | null) => void} onLandmarks
- */
-export default function Camera({ deviceId, onLandmarks, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true }) {
-  // A device change gets fresh state and fully tears down the previous session.
-  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} />
+// Fields the screens display or act on. Results that only differ elsewhere
+// (for example raw probabilities) are not forwarded, which keeps React
+// updates well below the 30 fps tracking rate.
+function displayKey(result) {
+  return [result.status, result.letter, result.candidate, result.lockedLetter, result.phase,
+    result.challengeId, result.error, Math.round((result.progress ?? 0) * 50)].join('|')
 }
 
-function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challengeId, targetSign, recognitionActive }) {
+/**
+ * Webcam + MediaPipe hand tracking and sign recognition.
+ *
+ * @param {string | undefined} deviceId  Optional camera id for two-player mode
+ */
+export default function Camera({ deviceId, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true }) {
+  // A device change gets fresh state and fully tears down the previous session.
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} />
+}
+
+function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetSign, recognitionActive }) {
   const videoRef = useRef(null)
+  const drawRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraLoading, setCameraLoading] = useState(true)
   const [cameraError, setCameraError] = useState(null)
@@ -42,9 +50,18 @@ function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challen
   useEffect(() => {
     if (!cameraReady || !recognitionEnabled) return undefined
     let cancelled = false
+    let lastKey = null
+    let lastSentAt = 0
     const controller = new RecognitionController({ infer: requestModel,
       onResult: result => {
         if (result.status === 'error') setRecognitionError(result.error)
+        // Unchanged results still go out every 250 ms: lesson feedback waits
+        // for a message to hold steady, which needs repeated updates.
+        const key = displayKey(result)
+        const now = performance.now()
+        if (key === lastKey && !result.isNew && now - lastSentAt < 250) return
+        lastKey = key
+        lastSentAt = now
         recognitionCallback.current?.(result)
       } })
     controller.setChallenge(challengeRef.current)
@@ -53,12 +70,12 @@ function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challen
     recognitionCallback.current?.({ status: 'loading', letter: null, progress: 0 })
     let ready = false
     let lastFrame = performance.now()
-    controllerRef.current.feed = points => {
+    controllerRef.current.feed = ({ landmarks, handedness }) => {
       lastFrame = performance.now()
       if (ready && activeRef.current) {
         const video = videoRef.current
         const aspectRatio = video?.videoWidth && video?.videoHeight ? video.videoWidth / video.videoHeight : 1
-        controller.process(points, lastFrame, { aspectRatio })
+        controller.process(landmarks, lastFrame, { aspectRatio, handedness })
       }
     }
     requestModel().then(() => { if (!cancelled) { ready = true; setRecognitionReady(true) } }).catch(error => {
@@ -142,21 +159,14 @@ function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challen
     }
   }, [deviceId])
 
-  const handleLandmarks = useCallback(
-    (nextLandmarks) => {
-      onLandmarks?.(nextLandmarks)
-      controllerRef.current?.feed(nextLandmarks)
-    },
-    [onLandmarks],
-  )
+  const handleFrame = useCallback((frame) => {
+    drawRef.current?.(frame.landmarks)
+    controllerRef.current?.feed(frame)
+  }, [])
 
-  const {
-    landmarks,
-    isReady: modelReady,
-    error: modelError,
-  } = useHandTracking(videoRef, {
+  const { isReady: modelReady, error: modelError } = useHandTracking(videoRef, {
     enabled: cameraReady,
-    onLandmarks: handleLandmarks,
+    onFrame: handleFrame,
   })
 
   const error = cameraError || modelError || recognitionError
@@ -183,7 +193,7 @@ function CameraSession({ deviceId, onLandmarks, onStatus, onRecognition, challen
           muted
           autoPlay
         />
-        <HandOverlay videoRef={videoRef} landmarks={landmarks} />
+        <HandOverlay videoRef={videoRef} drawRef={drawRef} />
         {cameraReady && modelReady && !error && <span className="sd-camera__live">Tracking</span>}
 
         {loading && (

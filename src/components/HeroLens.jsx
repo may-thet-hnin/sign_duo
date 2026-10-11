@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import PixelSprite from './Pixel.jsx';
-import { SUPPORTED_SIGNS } from '../recognition/config.js';
+import { ALPHABET_SIGNS } from '../recognition/config.js';
+import { SPRITES } from '../utils/sprites.js';
 
-const LETTERS = SUPPORTED_SIGNS.learning;
+// Only letters with pixel art; other letters would render an empty lens.
+const LETTERS = ALPHABET_SIGNS.filter(letter => SPRITES[letter]);
 
 /** Title-screen centrepiece: a glass lens that cycles through the signs the game can recognise. */
 export default function HeroLens() {

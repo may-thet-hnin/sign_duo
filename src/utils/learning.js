@@ -1,42 +1,5 @@
 import { SUPPORTED_SIGNS, STARTER_SIGNS } from '../recognition/config.js';
 import { COURSE_LESSONS } from './lessonContent.js';
-// Learning uses the game's classifier; this only confirms sustained predictions.
-export class PracticeHold {
-  constructor(target, durationMs = 1500, maxGapMs = 250) {
-    this.target = target;
-    this.durationMs = durationMs;
-    this.maxGapMs = maxGapMs;
-    this.reset();
-  }
-
-  reset() {
-    this.startedAt = null;
-    this.lastAt = null;
-    this.complete = false;
-  }
-
-  update(letter, now) {
-    if (this.complete) return { progress: 1, complete: true };
-    if (letter !== this.target || !Number.isFinite(now)) {
-      this.reset();
-      return { progress: 0, complete: false };
-    }
-    if (this.lastAt === null || now - this.lastAt > this.maxGapMs || now < this.lastAt) {
-      this.startedAt = now;
-    }
-    this.lastAt = now;
-    const progress = Math.min(1, (now - this.startedAt) / this.durationMs);
-    this.complete = progress >= 1;
-    return { progress, complete: this.complete };
-  }
-}
-
-export function handInFrame(points) {
-  return Array.isArray(points) && points.length === 21 && points.every(p =>
-    p && Number.isFinite(p.x) && Number.isFinite(p.y) &&
-    p.x > 0.025 && p.x < 0.975 && p.y > 0.025 && p.y < 0.975);
-}
-
 export const PROGRESS_KEY = 'sign-duo-learning-v1';
 export const emptyProgress = () => ({
   version: 1, position: 0, practiced: [], mastered: [], answers: [],
@@ -97,11 +60,6 @@ export function advanceProgress(progress, lesson = COURSE_LESSONS[0]) {
 
 export function replayProgress(progress) {
   return { ...emptyProgress(), mastered: progress.mastered, completions: progress.completions, successfulAttempts: progress.successfulAttempts };
-}
-
-export function recordExploration(progress, sign) {
-  if (!SUPPORTED_SIGNS.learning.includes(sign) || progress.mastered.includes(sign)) return progress;
-  return { ...progress, mastered: SUPPORTED_SIGNS.learning.filter(letter => progress.mastered.includes(letter) || letter === sign), successfulAttempts: progress.successfulAttempts + 1 };
 }
 
 export const COURSE_PROGRESS_KEY = 'sign-duo-learning-v2';

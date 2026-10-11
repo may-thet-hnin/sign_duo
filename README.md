@@ -6,7 +6,7 @@ Sign Duo teaches users the letters of ASL and checks accuracy using computer vis
 - JavaScript/React
 - Node.js
 - [Google Media Pipe](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) for the computer vision
-- Local ONNX Runtime Web ASL landmark MLP for A/B/L, plus experimental geometry for B/C/D/I/V/W/Y and temporal word practice for YES/NO/HELLO. HELLO is a labeled simplified motion exercise.
+- Local ONNX Runtime Web ASL landmark MLP ([nocontextdoruk/asl-landmark-mlp](https://huggingface.co/nocontextdoruk/asl-landmark-mlp)) for 16 static letters (A B C D E F I L M N O R S V W Y), plus temporal hand-geometry motion practice for HELLO/YES/NO. HELLO is a labeled simplified motion exercise. See [the model audit](docs/model-audit.md) for why other letters are not offered.
 - [Camo App](https://camo.com/) for the second webcam (1v1 "signs per minute" contest)
 
 
@@ -27,7 +27,7 @@ Race scoring and the pixel/glass design are preserved.
 
 ## Learning Mode
 
-Four lessons teach groups of three signs: A/B/L, C/D/I, V/W/Y, and HELLO/YES/NO.
+Six lessons teach small groups of signs: A/B/L, C/D/I, V/W/Y, E/S/M/N, O/F/R, and HELLO/YES/NO.
 Each includes guided references, camera practice, and knowledge checks. Static
 letters require about 900 ms of matching predictions plus sample/agreement
 validation; words use motion milestones instead of a stationary hold. Each lesson

@@ -7,6 +7,7 @@ import PixelSprite from "./Pixel.jsx";
  * - players:   [{ id, name, score, lives, maxLives, progress,
  *                 correct, attempts, bestStreak, timeSeconds }, ...]  (exactly two)
  * - winnerId:  optional. Overrides the automatic winner; null is an explicit tie.
+ * - winReason: optional. "finished_first" | "more_correct" | "fewer_mistakes" (from RaceEngine).
  * - onRematch: called when "Play again" is pressed
  * - onHome:    called when "Back to menu" is pressed (button hidden if omitted)
  */
@@ -34,7 +35,13 @@ function pickWinner(a, b, winnerId) {
   return null; // tie
 }
 
-export default function ResultsScreen({ players, winnerId, onRematch, onHome, durationSeconds }) {
+const WIN_REASONS = {
+  finished_first: "First to finish the sequence",
+  more_correct: "More correct signs when time ran out",
+  fewer_mistakes: "Same correct signs, fewer mistakes",
+};
+
+export default function ResultsScreen({ players, winnerId, winReason, onRematch, onHome, durationSeconds }) {
   const [a, b] = players;
   const winner = pickWinner(a, b, winnerId);
   const loser = winner ? (winner.id === a.id ? b : a) : null;
@@ -70,10 +77,8 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome, du
         <h1 className="rs__title">{winner ? winner.name : "It's a tie!"}</h1>
         <p className="rs__sub">
           {winner
-            ? margin > 0
-              ? `Won by ${margin.toLocaleString()} points`
-              : "Won on progress"
-            : "Both players finished level"}
+            ? WIN_REASONS[winReason] ?? (margin > 0 ? `Won by ${margin.toLocaleString()} points` : "Won on progress")
+            : "Same correct signs and mistakes"}
         </p>
       </section>
 
@@ -123,19 +128,3 @@ export default function ResultsScreen({ players, winnerId, onRematch, onHome, du
     </div>
   );
 }
-
-/* Example usage
-
-import ResultsScreen from "./ResultsScreen";
-
-<ResultsScreen
-  players={[
-    { id: "p1", name: "Player 1", score: 1250, lives: 2, maxLives: 3, progress: 100,
-      correct: 11, attempts: 13, bestStreak: 6, timeSeconds: 94 },
-    { id: "p2", name: "Player 2", score: 980, lives: 1, maxLives: 3, progress: 85,
-      correct: 9, attempts: 14, bestStreak: 4, timeSeconds: 101 },
-  ]}
-  onRematch={() => {}}
-  onHome={() => {}}
-/>
-*/

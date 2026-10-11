@@ -1,3 +1,6 @@
+> **Superseded for static letters:** see [model-audit.md](model-audit.md). Letters now come
+> from the ONNX model alone; the geometry rules described below were removed.
+
 # Recognition iteration 1: webcam validation required
 
 **Update:** See [expanded signs](expanded-signs.md) for the current vocabulary and

@@ -3,7 +3,7 @@ import Camera from './Camera.jsx';
 import PixelSprite from './Pixel.jsx';
 import RecognitionDebug from './RecognitionDebug.jsx';
 import { COURSE_LESSONS, REFERENCE_URL } from '../utils/lessonContent.js';
-import { SUPPORTED_SIGNS, RECOGNITION_CONFIG } from '../recognition/config.js';
+import { SUPPORTED_SIGNS } from '../recognition/config.js';
 import { emptyCourseProgress, parseCourseProgress, COURSE_PROGRESS_KEY, PROGRESS_KEY, updateLessonProgress, recordPractice, recordAnswer, advanceProgress, replayProgress, recognitionProgress } from '../utils/learning.js';
 import '../styles/learning.css';
 
@@ -38,7 +38,6 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
   const [recognition, setRecognition] = useState(null);
   const credited = useRef(false);
   const feedbackCandidate = useRef({ text: '', since: 0 });
-  const lastFrame = useRef(null);
   const [retry, setRetry] = useState(0);
   const attemptNumber = useRef(0);
   const sessionId = `practice:${sign.id}:${retry}`;
@@ -48,21 +47,9 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
   const [feedback, setFeedback] = useState('Show your hand to the camera to begin.');
   const [cameraStatus, setCameraStatus] = useState({ ready: false, error: null });
 
-  useEffect(() => {
-    const watchdog = setInterval(() => {
-      if (!credited.current && lastFrame.current !== null && performance.now() - lastFrame.current > RECOGNITION_CONFIG.maxGapMs) {
-        lastFrame.current = null;
-        setResult({ progress: 0, complete: false });
-        setDetected(null);
-        setFeedback('Tracking paused. Show your hand to the camera again.');
-      }
-    }, 150);
-    return () => clearInterval(watchdog);
-  }, []);
-
+  // Camera reports stalled tracking itself ('tracking-paused'), so no second watchdog is needed here.
   function handleRecognition(next) {
     if (credited.current || next.challengeId && next.challengeId !== currentSession.current) return;
-    lastFrame.current = performance.now();
     setRecognition(next);
     const matching = (next.candidate || next.letter) === sign.letter;
     const progress = recognitionProgress(next, sign.letter, currentSession.current);
@@ -97,7 +84,6 @@ function Practice({ sign, onSuccess, onContinue, previouslyPassed }) {
     setRecognition(null);
     setFeedback('Show your hand to the camera to begin.');
     feedbackCandidate.current = { text: '', since: 0 };
-    lastFrame.current = null;
     setCameraStatus({ ready: false, error: null });
     setRetry(nextAttempt);
   }
@@ -219,7 +205,7 @@ export default function LearnScreen() {
     <h2 ref={headingRef} tabIndex={-1} className="learn-heading">{view === 'dashboard' ? 'Master signs one lesson at a time.' : progress.completed ? `${lesson.title} completed!` : `${lesson.title} · ${position < lesson.practiceActivities ? sign.letter : 'Review'}`}</h2>
     {saveError && <p className="sd-error" role="alert">Your browser could not save progress. You can keep learning, but this attempt may be lost after a refresh.</p>}
     {view === 'dashboard' ? <>
-      <p className="learn-intro">Each lesson teaches a group of three signs with guided references, camera practice, and knowledge checks. Take your time. There are no lost hearts here.</p>
+      <p className="learn-intro">Each lesson teaches a small group of signs with guided references, camera practice, and knowledge checks. Take your time. There are no lost hearts here.</p>
       <div className="learn-summary glass">
         <div><strong>{mastered.size} / {SUPPORTED_SIGNS.learning.length}</strong><span>Signs practiced with camera</span></div>
         <div><strong>{completedLessons} / {COURSE_LESSONS.length}</strong><span>Lessons completed</span></div>

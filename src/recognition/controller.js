@@ -1,13 +1,12 @@
-import { normalizeLandmarks, decodePrediction } from './preprocessing.js';
+import { normalizeLandmarks, decodePrediction, canonicalHand } from './preprocessing.js';
 import { TemporalSmoother } from './temporalSmoothing.js';
 import { RECOGNITION_CONFIG, SUPPORTED_SIGNS, WORD_SIGNS } from './config.js';
-import { recognizeLetter } from '../utils/recognizeLetter.js';
-import { recognizeBGeometry } from './bGeometry.js';
-import { recognizeStaticGeometry } from './staticGeometry.js';
 import { DynamicGestureRecognizer } from './dynamicGestures.js';
 import { metricLandmarks } from '../utils/handGeometry.js';
 let nextControllerId = 0;
 
+// One controller per camera: static letters come from the ONNX model, words
+// from temporal hand geometry. Neither path is biased toward the target.
 export class RecognitionController {
   constructor({ infer, onResult, config = {}, allowlist = SUPPORTED_SIGNS.learning, clock = () => performance.now() }) {
     this.infer = infer; this.onResult = onResult; this.config = { ...RECOGNITION_CONFIG, ...config };
@@ -39,18 +38,17 @@ export class RecognitionController {
     const smoothed = this.smoother.update(null, now, status !== 'no-hand', status !== 'tracking-paused');
     this.emit({ ...smoothed, status, timestamp: now, handDetected: status !== 'no-hand', top: [], raw: null });
   }
-  async process(points, now, { aspectRatio = 1 } = {}) {
+  async process(points, now, { aspectRatio = 1, handedness = null } = {}) {
     if (this.disposed) return;
     if (!points) { this.invalidate('no-hand', now); return; }
-    const input = normalizeLandmarks(points);
-    if (!input) { this.invalidate('unknown', now); return; }
-    if (points.some(p => p.x <= 0 || p.x >= 1 || p.y <= 0 || p.y >= 1)) { this.invalidate('out-of-frame', now); return; }
-    const geometryPoints = metricLandmarks(points, aspectRatio);
-    if (!geometryPoints) { this.invalidate('unknown', now); return; }
-    if (this.busy || now - this.lastAt < this.config.intervalMs) return;
+    if (points.some(p => !p || p.x <= 0 || p.x >= 1 || p.y <= 0 || p.y >= 1)) { this.invalidate('out-of-frame', now); return; }
+    // MediaPipe x/z use width units and y uses height units. Equal axes keep
+    // a widescreen hand from looking squashed (16:9 raw input: 94% -> 81%).
+    const metric = metricLandmarks(points, aspectRatio);
+    if (!metric) { this.invalidate('unknown', now); return; }
     if (WORD_SIGNS.includes(this.targetSign)) {
       this.lastAt = now;
-      const result = this.dynamic.update(geometryPoints, now);
+      const result = this.dynamic.update(metric, now);
       const allowed = !result.letter || this.allowlist.includes(result.letter);
       this.emit({ ...result, ...(allowed ? {} : { letter: null, isNew: false, status: 'unknown' }),
         timestamp: now, handDetected: true, challengeId: this.challengeId,
@@ -59,6 +57,9 @@ export class RecognitionController {
         top: [], raw: null });
       return;
     }
+    const input = normalizeLandmarks(canonicalHand(metric, handedness));
+    if (!input) { this.invalidate('unknown', now); return; }
+    if (this.busy || now - this.lastAt < this.config.intervalMs) return;
     this.busy = true; this.lastAt = now;
     const generation = this.generation;
     const challengeId = this.challengeId;
@@ -67,24 +68,10 @@ export class RecognitionController {
       if (this.disposed || generation !== this.generation) return;
       if (this.clock() - now > this.config.maxGapMs) { this.invalidate('unknown', this.clock()); return; }
       const prediction = decodePrediction(output.logits, output.classes, this.config, this.allowlist);
-      // Preserve the previously working B rule. Model confidence remains attached
-      // to the model's raw class; geometry does not have a calibrated probability.
-      const legacy = recognizeLetter(points);
-      const geometryB = recognizeBGeometry(points) && this.allowlist.includes('B');
-      const geometry = recognizeStaticGeometry(geometryPoints);
-      const added = geometry.letter && this.allowlist.includes(geometry.letter) ? geometry.letter : null;
-      // Added signs use their unique geometric evidence. The static MLP is a
-      // diagnostic comparison, not a veto of valid curved/contact handshapes.
-      const uncertain = geometry.uncertain && !(prediction.letter === 'L' && legacy === 'L');
-      const letter = added || (uncertain ? null : geometryB ? 'B' :
-        (['A', 'B', 'L'].includes(prediction.letter) ? prediction.letter : null));
-      const smoothed = this.smoother.update(letter, now);
+      const smoothed = this.smoother.update(prediction.letter, now);
       const eventId = smoothed.isNew ? `${this.id}:${++this.eventNumber}` : null;
       this.emit({ ...prediction, ...smoothed, timestamp: now, handDetected: true, challengeId, eventId,
-        modelLetter: prediction.letter, validatedCandidate: letter,
-        method: added ? 'Static geometry (experimental); ONNX comparison' : geometryB ? 'B geometry (experimental); ONNX comparison' : 'ONNX MLP',
-        quality: added ? geometry.quality : null,
-        legacy, latencyMs: output.latencyMs });
+        handedness, latencyMs: output.latencyMs });
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;
       this.smoother.reset(); this.emit({ status: 'error', letter: null, progress: 0, isNew: false, error: error.message });

@@ -23,16 +23,19 @@ function completeLesson(p, lesson) {
   return p;
 }
 
-test('four lessons cover every supported sign exactly once in the requested groups', () => {
+test('lessons cover every supported sign exactly once, keeping the original groups first', () => {
   assert.deepEqual(COURSE_LESSONS.map(l => l.signs), [
-    ['A','B','L'], ['C','D','I'], ['V','W','Y'], ['HELLO','YES','NO'],
+    ['A','B','L'], ['C','D','I'], ['V','W','Y'], ['E','S','M','N'], ['O','F','R'], ['HELLO','YES','NO'],
   ]);
+  assert.equal(new Set(COURSE_LESSONS.map(l => l.id)).size, COURSE_LESSONS.length);
   assert.deepEqual(new Set(COURSE_LESSONS.flatMap(l => l.signs)), new Set(SUPPORTED_SIGNS.learning));
   for (const l of COURSE_LESSONS) {
     assert.equal(l.content.length, l.signs.length);
     assert.equal(l.activityCount, l.signs.length * 2 + l.quiz.length);
-    assert.equal(l.activityCount, 9);
-    assert.ok(l.quiz.every(s => l.signs.includes(s)));
+    assert.equal(l.quiz.length, l.signs.length);
+    assert.deepEqual(new Set(l.quiz), new Set(l.signs));
+    assert.notDeepEqual(l.quiz, l.signs, 'quiz order differs from the guided order');
+    assert.ok(l.content.every(sign => sign.steps.length && sign.description && (sign.image || sign.simplified)));
   }
 });
 

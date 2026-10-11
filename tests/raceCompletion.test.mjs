@@ -34,6 +34,7 @@ for (const winnerId of ['p1', 'p2']) {
     const final = engine.getResults();
     assert.equal(final.winnerId, winnerId);
     assert.equal(final.winner.id, winnerId);
+    assert.equal(final.winReason, 'finished_first');
     assert.equal(final.ranking[0].id, winnerId);
     assert.equal(final.endReason, 'player_finished');
     assert.equal(final.elapsedSeconds, 3.456789);
@@ -70,18 +71,20 @@ test('completion winner overrides equal scores, including zero elapsed time', ()
   assert.equal(result.elapsedSeconds, 0);
 });
 
-test('timeout preserves score/correct/SPM rules and explicitly ties only equal rankings', () => {
+test('timeout ranks correct signs, then fewer mistakes, and ties only when both are equal', () => {
   const { engine, at } = race();
   at(1000);
   recognize(engine, 'p1', 'A', 'p1');
   recognize(engine, 'p2', 'A', 'p2');
-  // Existing score formula yields equal score and correct counts; SPM breaks the tie.
+  // Equal correct signs: the extra wrong attempt must not win via a higher sign rate.
   recognize(engine, 'p2', 'A', 'wrong');
   at(30050);
   engine.updateTime();
   const final = engine.getResults();
   assert.equal(final.endReason, 'time_up');
-  assert.equal(final.winnerId, 'p2');
+  assert.equal(final.winnerId, 'p1');
+  assert.equal(final.winReason, 'fewer_mistakes');
+  assert.equal(final.ranking[0].id, 'p1');
   assert.equal(final.players[0].competitionScore, final.players[1].competitionScore);
   assert.equal(final.elapsedSeconds, 30);
   assert.equal(final.remainingSeconds, 0);
@@ -99,7 +102,31 @@ test('timeout preserves score/correct/SPM rules and explicitly ties only equal r
     tied.engine.updateTime();
     assert.equal(tied.engine.getResults().winnerId, null);
     assert.equal(tied.engine.getResults().winner, null);
+    assert.equal(tied.engine.getResults().winReason, null);
   }
+
+  const ahead = race();
+  ahead.at(1000);
+  recognize(ahead.engine, 'p2', 'A', 'p2-a');
+  recognize(ahead.engine, 'p2', 'B', 'p2-b');
+  recognize(ahead.engine, 'p1', 'A', 'p1-a');
+  ahead.at(30000);
+  ahead.engine.updateTime();
+  assert.equal(ahead.engine.getResults().winnerId, 'p2');
+  assert.equal(ahead.engine.getResults().winReason, 'more_correct');
+});
+
+test('scores come from unrounded counts, so rounding never decides a winner', () => {
+  const { engine, at } = race('versus', ['A', 'B', 'L']);
+  at(1000);
+  recognize(engine, 'p1', 'A', 'a1');
+  recognize(engine, 'p2', 'B', 'w1');
+  recognize(engine, 'p2', 'L', 'w2');
+  recognize(engine, 'p2', 'A', 'a2');
+  at(7000);
+  const [p1, p2] = engine.getSnapshot().players;
+  assert.equal(p1.competitionScore, p2.competitionScore, 'one correct sign each in 7 s');
+  assert.equal(p1.competitionScore, Number((60 / 7).toFixed(2)));
 });
 
 test('deadline takes precedence over a late completion event', () => {

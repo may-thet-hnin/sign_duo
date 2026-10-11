@@ -1,41 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { recognizeLetter } from '../src/utils/recognizeLetter.js';
-import { recognizeStaticGeometry } from '../src/recognition/staticGeometry.js';
 import { DynamicGestureRecognizer } from '../src/recognition/dynamicGestures.js';
 import { RecognitionController } from '../src/recognition/controller.js';
 import { RaceEngine } from '../src/utils/raceEngine.js';
 import { ALPHABET_SIGNS, WORD_SIGNS, CHALLENGE_SEQUENCES } from '../src/recognition/config.js';
-import { ALPHABET_LESSONS, WORD_LESSONS, LESSONS } from '../src/utils/lessonContent.js';
-import { emptyProgress, recordExploration, parseProgress } from '../src/utils/learning.js';
+import { ALPHABET_LESSONS, WORD_LESSONS, signContent } from '../src/utils/lessonContent.js';
 import { pose, cameraPoints, wordFrames } from './fixtures/signs.mjs';
 
 const classes = JSON.parse(await readFile(new URL('../public/models/asl/mlp_classes.json', import.meta.url)));
 const inference = letter => ({ logits: classes.map(c => c === letter ? 20 : -20), classes, latencyMs: 1 });
-
-for (const letter of ['C','D','I','V','W','Y']) {
-  test(`${letter} geometry is invariant to size, translation, reflection and in-plane rotation`, () => {
-    for (const scale of [.05,.08,.12]) for (const mirror of [false,true]) for (const angle of [-.5,0,.5]) {
-      const points = cameraPoints(pose(letter), { scale, mirror, angle, dx: .2, dy: -.2 });
-      assert.equal(recognizeStaticGeometry(points).letter, letter);
-      assert.equal(recognizeLetter(points), letter);
-    }
-  });
-}
-
-test('A/B/L legacy geometry remains intact; unknown and similar shapes are rejected', () => {
-  for (const letter of ['A','B','L']) assert.equal(recognizeLetter(cameraPoints(pose(letter))), letter);
-  assert.equal(recognizeStaticGeometry(cameraPoints(pose('OPEN'))).letter, null);
-  const u = pose('V');
-  for (const [a,b] of [[6,10],[7,11],[8,12]]) u[b] = { ...u[a], x: u[a].x + .15 };
-  assert.equal(recognizeStaticGeometry(cameraPoints(u)).letter, null);
-  const uncertain = pose('I'); uncertain[4].x = -1.4; // thumb between tucked and fully open
-  assert.equal(recognizeStaticGeometry(cameraPoints(uncertain)).letter, null);
-  const o = pose('C'); o[4] = { ...o[8] };
-  assert.equal(recognizeStaticGeometry(cameraPoints(o)).letter, null);
-  assert.equal(recognizeStaticGeometry(null).letter, null);
-});
 
 for (const word of WORD_SIGNS) {
   test(`${word} needs ordered motion and cannot repeatedly count a held endpoint`, () => {
@@ -104,18 +78,23 @@ test('NO can repeat after reopening both fingers without losing hand tracking', 
   assert.equal(accepted, 2);
 });
 
-test('controller geometry retains stability thresholds and cannot be vetoed by a wrong model class', async () => {
-  let now = 0; const results = [];
-  const controller = new RecognitionController({ infer: async () => inference('V'), clock: () => now, onResult: r => results.push(r) });
-  controller.setChallenge('v'); controller.setTarget('V');
-  for (now = 0; now <= 1500; now += 100) await controller.process(cameraPoints(pose('V')), now);
-  assert.equal(results.filter(r => r.isNew).length, 1);
-  controller.dispose();
-  const conflicts = [];
-  const uncertain = new RecognitionController({ infer: async () => inference('W'), clock: () => now, onResult: r => conflicts.push(r) });
-  for (now = 0; now <= 1500; now += 100) await uncertain.process(cameraPoints(pose('V')), now);
-  assert.equal(conflicts.filter(r => r.isNew && r.letter === 'V').length, 1);
-  uncertain.dispose();
+test('every offered letter comes from the model and keeps the hold gate', async () => {
+  for (const letter of ALPHABET_SIGNS) {
+    let now = 0; const results = [];
+    const controller = new RecognitionController({ infer: async () => inference(letter), clock: () => now, onResult: r => results.push(r) });
+    controller.setChallenge(letter); controller.setTarget(letter);
+    for (now = 0; now <= 1500; now += 100) await controller.process(cameraPoints(pose('OPEN')), now);
+    assert.deepEqual(results.filter(r => r.isNew).map(r => r.letter), [letter]);
+    assert.ok(results.filter(r => r.timestamp < 900).every(r => !r.isNew));
+    controller.dispose();
+  }
+  for (const excluded of ['G','U','X','J','0']) {
+    let now = 0; const results = [];
+    const controller = new RecognitionController({ infer: async () => inference(excluded), clock: () => now, onResult: r => results.push(r) });
+    for (now = 0; now <= 1500; now += 100) await controller.process(cameraPoints(pose('OPEN')), now);
+    assert.ok(results.every(r => !r.isNew && r.letter === null), `${excluded} must never be accepted`);
+    controller.dispose();
+  }
 });
 
 test('mixed challenges re-arm static letters after a word and discard partial motion on target changes', async () => {
@@ -165,15 +144,11 @@ test('solo and duo consume temporal events with independent cameras and frozen f
   }
 });
 
-test('every offered sign has content and race challenges; expanded practice preserves starter saves', () => {
-  assert.deepEqual(LESSONS.map(s => s.letter), ['A','B','L']);
+test('every offered sign has content and race challenges', () => {
   assert.deepEqual(new Set(ALPHABET_LESSONS.map(s => s.letter)), new Set(ALPHABET_SIGNS));
   assert.deepEqual(WORD_LESSONS.map(s => s.letter), WORD_SIGNS);
   assert.equal(WORD_LESSONS[0].simplified, true);
+  for (const sign of [...ALPHABET_SIGNS, ...WORD_SIGNS]) assert.equal(signContent(sign)?.letter, sign);
   for (const sequence of Object.values(CHALLENGE_SEQUENCES)) assert.doesNotThrow(() => new RaceEngine({ targetLetters: sequence }));
-  const progress = recordExploration(recordExploration(emptyProgress(), 'C'), 'YES');
-  assert.equal(progress.position, 0);
-  assert.deepEqual(progress.practiced, []);
-  assert.equal(recordExploration(progress, 'C'), progress);
-  assert.deepEqual(parseProgress(JSON.stringify(progress)), progress);
+  assert.deepEqual(new Set(CHALLENGE_SEQUENCES.alphabet), new Set(ALPHABET_SIGNS));
 });

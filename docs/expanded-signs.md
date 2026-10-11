@@ -43,15 +43,34 @@ repeated identical letters require release. Letter/word transitions reset the st
 hold so a letter can be performed again after a word.
 
 Word targets use temporal geometry instead of static model inference. Progress
-follows starting pose, movement, trajectory and completion milestones. Completion
-requires five observations, three changing movement frames, a trajectory lasting
-at least 240 ms and two endpoint observations; neither endpoint has a timed hold.
-History is limited to 30 samples and 2.4 seconds. Hand loss, malformed/clipped frames, excessive scale or position
+follows the movement continuously. Word practice processes every tracked frame,
+independently of the alphabet model's inference interval. Completion requires an
+observed path through the interior of each stroke, at least three distinct
+movement steps per stroke, limited backtracking, at least 240 ms and two endpoint
+observations; neither endpoint has a timed hold. YES validates separate bend and
+return strokes; NO validates both fingertip paths and their coordination.
+History is limited to 256 samples and 2.4 seconds. Hand loss, malformed/clipped frames, excessive scale or position
 changes, tracking stalls, target changes and disposal reset partial motions. Abrupt
 single-frame jumps are rejected. Each camera owns its buffer, lock and event IDs.
+Small per-frame movements accumulate instead of being discarded. Dynamic-only
+handshape tolerances allow relaxed thumbs and finger curl; up to 160 ms of
+uncertain handshape tracking preserves a partial motion. Explicit hand loss still
+resets immediately.
+
+Webcam landmarks jitter by a few pixels every frame, and the stroke checks above
+treated that as motion. In simulation with 2-3 px of jitter, YES completed 1 time
+in 40 and NO 5 in 40. Motion is therefore measured on One-Euro-filtered landmarks,
+and path travel ignores wobble below a small deadband. The handshape is still
+read from each raw frame, and the interior-step check and the glitch-jump check
+use raw values, so a tracking glitch or a couple of teleporting frames cannot
+pose as a motion. With this, simulated words complete 40/40 at that jitter, and
+still hands do not trigger. A repeated YES nod counts once. Up to 10% of NO
+frames may fall outside the two-finger coordination limit.
 
 - **YES:** curled fist with tucked thumb; knuckles move downward relative to the
   wrist and return. Translating an unchanged fist up and down does not count.
+  A bend of about 23 degrees with downward knuckle movement is sufficient; a
+  deep 60-degree bend is not required. The thumb can rest across the fingers.
 - **NO:** index and middle fingers start extended together with a gap to the thumb,
   then both close toward the thumb while the other fingers stay folded. A one-finger
   pinch does not count. Holding the closed pose does not repeat; reopen both fingers
@@ -59,7 +78,8 @@ single-frame jumps are rejected. Each camera owns its buffer, lock and event IDs
 - **HELLO:** open hand sweeps outward sideways. This is explicitly
   **simplified HELLO motion practice**. No head/face landmarks are available, so the
   recognizer cannot verify forehead placement or the complete forehead-to-outward sign.
-  A stationary palm does not count. Release before repeating HELLO or YES.
+  Slight diagonal drift is allowed. A stationary palm does not count. Release
+  or hold a different handshape for 400 ms before repeating HELLO or YES.
 
 Both race modes use the same chosen sequence. Only validated new events with the
 correct player/challenge ID advance progress. The first Duo completion still ends

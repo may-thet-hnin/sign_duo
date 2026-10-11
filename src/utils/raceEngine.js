@@ -18,7 +18,7 @@ export class RaceEngine {
     durationSeconds = 60,
     startingHearts = 5,
     penaltySeconds = 2,
-    targetLetters = null,
+    targetLetters = SUPPORTED_SIGNS.competition,
     clock = () => performance.now(),
   } = {}) {
     if (!["single", "versus"].includes(mode)) {
@@ -34,9 +34,7 @@ export class RaceEngine {
     this.startingHearts = startingHearts;
     this.penaltySeconds = penaltySeconds;
 
-    this.targetLetters = targetLetters
-      ? targetLetters.map((letter) => letter.toUpperCase())
-      : this.generateLetters(500);
+    this.targetLetters = targetLetters.map((letter) => letter.toUpperCase());
 
     if (!this.targetLetters.length || this.targetLetters.some(letter => !SUPPORTED_SIGNS.competition.includes(letter))) {
       throw new Error(`Competition targets must be supported signs: ${SUPPORTED_SIGNS.competition.join(', ')}.`);
@@ -47,14 +45,7 @@ export class RaceEngine {
     this.endedAt = null;
     this.endReason = null;
     this.winnerId = null;
-  }
-
-  generateLetters(count) {
-    const letters = SUPPORTED_SIGNS.competition;
-
-    return Array.from({ length: count }, () => {
-      return letters[Math.floor(Math.random() * letters.length)];
-    });
+    this.winReason = null;
   }
 
   addPlayer(playerId, name = playerId) {
@@ -282,6 +273,7 @@ export class RaceEngine {
     const finisher = players.find((player) => player.finished);
     if (finisher) {
       this.winnerId = finisher.id;
+      this.winReason = "finished_first";
       this.end(now, "player_finished");
     }
   }
@@ -295,12 +287,15 @@ export class RaceEngine {
     this.endedAt = now;
     this.endReason = reason;
 
+    // At time-up, more correct signs wins, then fewer mistakes (each one is a
+    // time penalty). Equal on both is a genuine tie. Sign rate is not used: it
+    // counts wrong attempts, so it would reward the player with more mistakes.
     if (this.mode === 'versus' && this.winnerId === null) {
-      const ranking = this.getResults(now).ranking;
-      const [first, second] = ranking;
-      if (first && second && (first.competitionScore !== second.competitionScore ||
-          first.correct !== second.correct || first.spm !== second.spm)) {
-        this.winnerId = first.id;
+      const [first, second] = this.getResults(now).ranking;
+      if (first && second && first.correct !== second.correct) {
+        this.winnerId = first.id; this.winReason = "more_correct";
+      } else if (first && second && first.mistakes !== second.mistakes) {
+        this.winnerId = first.id; this.winReason = "fewer_mistakes";
       }
     }
 
@@ -327,15 +322,12 @@ export class RaceEngine {
     );
   }
 
+  // Correct signs per minute (SPM x accuracy), computed without the rounding
+  // applied to the displayed SPM and accuracy figures.
   getCompetitionScore(player, now = this.clock()) {
-    const spm = this.getSPM(player, now);
-    const accuracy = this.getAccuracy(player) / 100;
-
-    // Tunable starting weights: 70% correct letters,
-    // 30% adjusted SPM.
-    return Number(
-      (spm * accuracy).toFixed(2)
-    );
+    const { elapsedSeconds } = this.getTime(now);
+    if (elapsedSeconds <= 0) return 0;
+    return Number((player.correct * 60 / elapsedSeconds).toFixed(2));
   }
 
   getPlayerSnapshot(player, now = this.clock()) {
@@ -372,11 +364,7 @@ export class RaceEngine {
       if (this.mode === "versus") {
         if (a.id === this.winnerId) return -1;
         if (b.id === this.winnerId) return 1;
-        return (
-          b.competitionScore - a.competitionScore ||
-          b.correct - a.correct ||
-          b.spm - a.spm
-        );
+        return b.correct - a.correct || a.mistakes - b.mistakes;
       }
 
       return (
@@ -396,6 +384,7 @@ export class RaceEngine {
       ...snapshot,
       winner,
       winnerId: this.winnerId,
+      winReason: this.winReason,
       ranking,
       endReason: this.endReason,
     };
@@ -411,42 +400,3 @@ export class RaceEngine {
     return player;
   }
 }
-
-/*
-const race = new RaceEngine({
-  mode: "single",
-  durationSeconds: 60,
-  startingHearts: 5,
-});
-
-race.addPlayer("p1", "Player");
-race.start();
-
-
-const race = new RaceEngine({
-  mode: "versus",
-  durationSeconds: 60,
-  penaltySeconds: 2,
-});
-
-race.addPlayer("p1", "Player 1");
-race.addPlayer("p2", "Player 2");
-
-race.start();
-
-// Each camera feeds its own player's recognition result.
-race.submitLetter("p1", "A");
-race.submitLetter("p2", "B");
-
-// Get the current standings.
-console.log(race.getSnapshot());
-
-// When the timer expires:
-race.updateTime();
-
-// After the race:
-if (race.status === "finished") {
-  console.log(race.getResults());
-}
-  
-*/

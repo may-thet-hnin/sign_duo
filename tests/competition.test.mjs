@@ -5,10 +5,10 @@ import { RaceEngine } from '../src/utils/raceEngine.js';
 import { raceFeedback } from '../src/utils/raceFeedback.js';
 import { TemporalSmoother } from '../src/recognition/temporalSmoothing.js';
 import { RecognitionController } from '../src/recognition/controller.js';
-import { recognizeBGeometry } from '../src/recognition/bGeometry.js';
 import { RACE_DURATIONS } from '../src/recognition/config.js';
 
 const classes = JSON.parse(await readFile(new URL('../public/models/asl/mlp_classes.json', import.meta.url)));
+const { samples } = JSON.parse(await readFile(new URL('./fixtures/referenceLandmarks.json', import.meta.url)));
 // Synthetic articulated geometry tests mechanics, not measured webcam accuracy.
 function bFixture() {
   const points = Array.from({ length: 21 }, () => ({ x: .5, y: .7, z: 0 }));
@@ -139,41 +139,16 @@ test('all timer choices wait for start, use monotonic elapsed time and clamp at 
   }
 });
 
-test('B compatibility checks require all four extended fingers and folded thumb', () => {
-  const b = bFixture(); assert.equal(recognizeBGeometry(b), true);
-  for (const tip of [8,12,16,20]) {
-    const folded = b.map(p => ({ ...p })); folded[tip].y = folded[tip - 3].y;
-    assert.equal(recognizeBGeometry(folded), false);
-  }
-  const palm = b.map(p => ({ ...p })); palm[4].x = .15;
-  assert.equal(recognizeBGeometry(palm), false);
-  assert.equal(recognizeBGeometry(null), false);
-});
-
-test('B compatibility works alongside a different ONNX class without fabricated confidence', async () => {
-  const results = [];
-  const controller = new RecognitionController({ onResult: result => results.push(result), infer: async () => ({
-    logits: classes.map(c => c === '4' ? 20 : -20), classes, latencyMs: 1,
-  }) });
-  controller.setChallenge('p1:0');
-  const now = performance.now();
-  await controller.process(bFixture(), now);
-  assert.equal(results[0].candidate, 'B'); assert.equal(results[0].raw, '4');
-  assert.equal(results[0].status, 'tentative'); assert.equal(results[0].isNew, false);
-  assert.match(results[0].method, /geometry/); assert.equal(results[0].modelLetter, null);
-  controller.dispose();
-});
-
-test('real ONNX plus B geometry and time validation advances the race end to end', async () => {
+test('real ONNX on real B landmarks and time validation advance the race end to end', async () => {
   const ort = await import('onnxruntime-web');
-  const { normalizeLandmarks } = await import('../src/recognition/preprocessing.js');
   ort.env.wasm.numThreads = 1;
+  const reference = samples.find(s => s.letter === 'B' && s.handedness === 'Left');
+  const b = reference.points.map(([x, y, z]) => ({ x, y, z }));
   const session = await ort.InferenceSession.create(await readFile(new URL('../public/models/asl/mlp_asl.onnx', import.meta.url)), { executionProviders: ['wasm'] });
   let now = 0;
   const engine = start('single', ['B','L']);
   const controller = new RecognitionController({ clock: () => now,
     infer: async input => {
-      assert.deepEqual(input, normalizeLandmarks(bFixture()));
       const inferenceStart = performance.now();
       const output = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', input, [1,63]) });
       return { logits: output[session.outputNames[0]].data, classes, latencyMs: performance.now() - inferenceStart };
@@ -187,7 +162,7 @@ test('real ONNX plus B geometry and time validation advances the race end to end
   });
   controller.setChallenge(engine.getChallengeId('p1'));
   try {
-    for (now = 0; now <= 2000; now += 100) await controller.process(bFixture(), now);
+    for (now = 0; now <= 2000; now += 100) await controller.process(b, now, { handedness: reference.handedness });
     assert.equal(engine.getPlayer('p1').correct, 1);
     assert.equal(engine.getCurrentTarget('p1'), 'L');
   } finally { controller.dispose(); await session.release(); }

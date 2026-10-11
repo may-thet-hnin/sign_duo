@@ -5,7 +5,7 @@ import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
 import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
-import { RACE_DURATIONS, CHALLENGE_SEQUENCES } from './recognition/config.js';
+import { RACE_DURATIONS, CHALLENGE_SEQUENCES, ALPHABET_SIGNS, WORD_SIGNS } from './recognition/config.js';
 import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
@@ -172,7 +172,7 @@ export default function App() {
           <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>Choose your race duration. Five hearts.</p></article>
           <article className="sd-feature glass"><PixelSprite name="bolt" scale={5} /><h3>Duo</h3><p>Two webcams, one shared sequence, real-time competition.</p></article>
         </div>
-        <p className="sd-hint">Practice nine letters and three basic word motions. Hold letters steadily; complete the movement for words. HELLO uses simplified motion practice.</p>
+        <p className="sd-hint">Practice {ALPHABET_SIGNS.length} letters and {WORD_SIGNS.length} basic word motions. Hold letters steadily; complete the movement for words. HELLO uses simplified motion practice.</p>
       </section>}
 
       {screen === 'learn' && <section className="sd-learn">
@@ -226,7 +226,7 @@ export default function App() {
       {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} sequence={sequence} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
 
       {screen === 'results' && results && (mode === 'versus'
-        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results, sequence.length))} winnerId={results.winnerId} onRematch={startRace} onHome={goHome} />
+        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results, sequence.length))} winnerId={results.winnerId} winReason={results.winReason} onRematch={startRace} onHome={goHome} />
         : <section className="sd-solo-result glass">
             <PixelSprite name="trophy" scale={7} className="sd-trophy" />
             <h1 className="sd-page-title">Great practice!</h1>

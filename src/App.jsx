@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import LearnScreen, { LESSONS } from './components/LearnScreen.jsx';
+import LearnScreen from './components/LearnScreen.jsx';
 import RaceScreen from './components/RaceScreen.jsx';
+import PixelSprite from './components/Pixel.jsx';
+import Scenery from './components/Scenery.jsx';
+import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
 import { recognizeLetter } from './utils/recognizeLetter.js';
 import { LetterStabilizer } from './utils/stabilizeLetter.js';
@@ -8,7 +11,6 @@ import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
 const TEST_SEQUENCE = ['A', 'B', 'L', 'A', 'L', 'B', 'L', 'A', 'B', 'L', 'B', 'A'];
-const SUPPORTED_LESSONS = LESSONS.filter(lesson => ['A', 'B', 'L'].includes(lesson.letter));
 
 function asResultPlayer(player, snapshot) {
   return {
@@ -111,27 +113,82 @@ export default function App() {
     setError(''); setScreen('home');
   }
 
-  return <main className="sd-app">
-    <nav className="sd-nav"><button className="sd-brand" onClick={goHome}>✋ SignDuo</button><span>Learn · Practice · Compete</span></nav>
-    {screen === 'home' && <section className="sd-home">
-      <p className="sd-eyebrow">Interactive ASL alphabet experience</p>
-      <h1>Learn signs. Race friends.</h1>
-      <p>Learn the handshapes, then test your skills with live webcam recognition.</p>
-      <div className="sd-home-actions"><button className="sd-button" onClick={() => setScreen('learn')}>Start learning</button><button className="sd-button sd-button-secondary" onClick={() => setScreen('setup')}>Play a race →</button></div>
-      <div className="sd-feature-grid"><article><h3>📖 Learn</h3><p>Guided letters, quizzes and self-guided handshape practice.</p></article><article><h3>🏁 Solo</h3><p>60 seconds to complete the sequence. Five hearts.</p></article><article><h3>⚡ Duo</h3><p>Two webcams, one shared sequence, real-time competition.</p></article></div>
-      <p className="sd-hint">Live recognition currently supports A, B and L. Learning practice is self-assessed.</p>
-    </section>}
-    {screen === 'learn' && <section className="sd-learn"><button className="sd-link" onClick={goHome}>← Back to menu</button><h1>Sign lessons</h1><LearnScreen lessons={SUPPORTED_LESSONS} onFinish={() => {}} /><button className="sd-button sd-button-secondary sd-after-learn" onClick={() => setScreen('setup')}>Ready to race? →</button></section>}
-    {screen === 'setup' && <section className="sd-setup"><button className="sd-link" onClick={goHome}>← Back to menu</button><p className="sd-eyebrow">Race setup</p><h1>Choose your challenge</h1>
-      <div className="sd-mode-grid"><button className={`sd-mode ${mode === 'single' ? 'selected' : ''}`} onClick={() => { setMode('single'); setError(''); }}><strong>🏁 Solo</strong><span>One webcam · 5 hearts · 60 seconds</span></button><button className={`sd-mode ${mode === 'versus' ? 'selected' : ''}`} onClick={() => { setMode('versus'); setError(''); }}><strong>⚡ Duo</strong><span>Two webcams · head-to-head · 60 seconds</span></button></div>
-      <div className="sd-setup-box"><h2>Camera setup</h2><button className="sd-button sd-button-secondary" onClick={findCameras}>Find cameras / allow access</button><p className="sd-hint" aria-live="polite">{deviceMessage || 'Select webcams before racing. Solo can also use your default webcam.'}</p>
-        {devices.length > 0 && <div className="sd-camera-selects">{['p1', ...(mode === 'versus' ? ['p2'] : [])].map(id => <label key={id}>{id === 'p1' ? 'Player 1 webcam' : 'Player 2 webcam'}<select value={cameraIds[id]} onChange={event => setCameraIds(old => ({ ...old, [id]: event.target.value }))}><option value="">Select webcam</option>{devices.map((d, i) => <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>)}</select></label>)}</div>}
-        {mode === 'versus' && <p className="sd-hint">Duo requires two distinct webcams connected to this computer (a phone can work as a second webcam).</p>}
-      </div>
-      {error && <p className="sd-error" role="alert">{error}</p>}
-      <button className="sd-button sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race →</button>
-    </section>}
-    {screen === 'race' && gameState && <RaceScreen gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} rawLetters={rawLetters} events={events} sequence={TEST_SEQUENCE} onLandmarks={handleLandmarks} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
-    {screen === 'results' && results && (mode === 'versus' ? <ResultsScreen players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.ranking[0].competitionScore === results.ranking[1].competitionScore ? null : results.winner?.id} onRematch={startRace} onHome={goHome} /> : <section className="sd-solo-result"><p className="sd-eyebrow">Race finished</p><h1>Great practice!</h1><h2>{results.players[0].correct} / {TEST_SEQUENCE.length} signs correct</h2><p>Accuracy: {results.players[0].accuracy}% · Best streak: {results.players[0].bestStreak} · SPM: {results.players[0].spm}</p><div className="sd-home-actions"><button className="sd-button" onClick={startRace}>Play again</button><button className="sd-button sd-button-secondary" onClick={goHome}>Back to menu</button></div></section>)}
-  </main>;
+  return <>
+    <Scenery />
+    <div className="sd-scan" aria-hidden="true" />
+    <main className="sd-app">
+      <nav className="sd-nav glass">
+        <button className="sd-brand" onClick={goHome}><PixelSprite name="A" scale={2} />Sign Duo</button>
+        <span className="sd-nav-note">Learn, practice, compete</span>
+      </nav>
+
+      {screen === 'home' && <section className="sd-home">
+        <div className="sd-home-copy">
+          <h1 className="sd-logo"><span>Sign</span><span>Duo</span></h1>
+          <p className="sd-tagline">Learn signs. Race friends.</p>
+          <p className="sd-lede">Learn the handshapes, then test your skills with live webcam recognition.</p>
+          <div className="sd-home-actions">
+            <button className="sd-button sd-button-start" onClick={() => setScreen('learn')}>Start learning</button>
+            <button className="sd-button sd-button-secondary" onClick={() => setScreen('setup')}>Play a race</button>
+          </div>
+        </div>
+        <HeroLens />
+        <div className="sd-feature-grid">
+          <article className="sd-feature glass"><PixelSprite name="A" scale={4} /><h3>Learn</h3><p>Guided letters, camera-verified practice and knowledge checks.</p></article>
+          <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>60 seconds to complete the sequence. Five hearts.</p></article>
+          <article className="sd-feature glass"><PixelSprite name="bolt" scale={5} /><h3>Duo</h3><p>Two webcams, one shared sequence, real-time competition.</p></article>
+        </div>
+        <p className="sd-hint">Live recognition currently supports A, B and L. Hold each sign steadily to complete camera practice.</p>
+      </section>}
+
+      {screen === 'learn' && <section className="sd-learn">
+        <button className="sd-link" onClick={goHome}>Back to menu</button>
+        <h1 className="sd-page-title">Sign lessons</h1>
+        <LearnScreen />
+        <button className="sd-button sd-button-secondary sd-after-learn" onClick={() => setScreen('setup')}>Ready to race?</button>
+      </section>}
+
+      {screen === 'setup' && <section className="sd-setup">
+        <button className="sd-link" onClick={goHome}>Back to menu</button>
+        <h1 className="sd-page-title">Choose your challenge</h1>
+        <div className="sd-mode-grid">
+          <button className={`sd-mode glass ${mode === 'single' ? 'selected' : ''}`} aria-pressed={mode === 'single'} onClick={() => { setMode('single'); setError(''); }}>
+            <PixelSprite name="flag" scale={5} />
+            <strong>Solo</strong>
+            <span>One webcam · 5 hearts · 60 seconds</span>
+          </button>
+          <button className={`sd-mode glass ${mode === 'versus' ? 'selected' : ''}`} aria-pressed={mode === 'versus'} onClick={() => { setMode('versus'); setError(''); }}>
+            <PixelSprite name="bolt" scale={5} />
+            <strong>Duo</strong>
+            <span>Two webcams · head-to-head · 60 seconds</span>
+          </button>
+        </div>
+        <div className="sd-setup-box glass">
+          <h2>Camera setup</h2>
+          <button className="sd-button sd-button-secondary" onClick={findCameras}>Find cameras / allow access</button>
+          <p className="sd-hint" aria-live="polite">{deviceMessage || 'Select webcams before racing. Solo can also use your default webcam.'}</p>
+          {devices.length > 0 && <div className="sd-camera-selects">{['p1', ...(mode === 'versus' ? ['p2'] : [])].map(id => <label key={id}>{id === 'p1' ? 'Player 1 webcam' : 'Player 2 webcam'}<select value={cameraIds[id]} onChange={event => setCameraIds(old => ({ ...old, [id]: event.target.value }))}><option value="">Select webcam</option>{devices.map((d, i) => <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>)}</select></label>)}</div>}
+          {mode === 'versus' && <p className="sd-hint">Duo requires two distinct webcams connected to this computer (a phone can work as a second webcam).</p>}
+        </div>
+        {error && <p className="sd-error" role="alert">{error}</p>}
+        <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
+      </section>}
+
+      {screen === 'race' && gameState && <RaceScreen gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} rawLetters={rawLetters} events={events} sequence={TEST_SEQUENCE} onLandmarks={handleLandmarks} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
+
+      {screen === 'results' && results && (mode === 'versus'
+        ? <ResultsScreen players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.ranking[0].competitionScore === results.ranking[1].competitionScore ? null : results.winner?.id} onRematch={startRace} onHome={goHome} />
+        : <section className="sd-solo-result glass">
+            <PixelSprite name="trophy" scale={7} className="sd-trophy" />
+            <h1 className="sd-page-title">Great practice!</h1>
+            <h2>{results.players[0].correct} / {TEST_SEQUENCE.length} signs correct</h2>
+            <dl className="sd-result-stats">
+              <div><dt>Accuracy</dt><dd>{results.players[0].accuracy}%</dd></div>
+              <div><dt>Best streak</dt><dd>{results.players[0].bestStreak}</dd></div>
+              <div><dt>Signs per minute</dt><dd>{results.players[0].spm}</dd></div>
+            </dl>
+            <div className="sd-home-actions"><button className="sd-button sd-button-start" onClick={startRace}>Play again</button><button className="sd-button sd-button-secondary" onClick={goHome}>Back to menu</button></div>
+          </section>)}
+    </main>
+  </>;
 }

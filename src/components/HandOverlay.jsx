@@ -9,29 +9,39 @@ function drawHand(ctx, landmarks, width, height) {
     return
   }
 
-  ctx.lineWidth = Math.max(2, width / 320)
-  ctx.strokeStyle = '#22d3ee'
-  ctx.fillStyle = '#f472b6'
+  // Chunky 8-bit skeleton: dark outline pass, then a bright line on top.
+  const line = Math.max(3, Math.round(width / 200))
+  ctx.lineCap = 'square'
+  ctx.lineJoin = 'miter'
 
-  for (const connection of CONNECTIONS) {
-    const start = landmarks[connection.start]
-    const end = landmarks[connection.end]
-    if (!start || !end) {
-      continue
+  for (const [strokeWidth, color] of [[line + 4, '#130b3a'], [line, '#5ff3ff']]) {
+    ctx.lineWidth = strokeWidth
+    ctx.strokeStyle = color
+    for (const connection of CONNECTIONS) {
+      const start = landmarks[connection.start]
+      const end = landmarks[connection.end]
+      if (!start || !end) {
+        continue
+      }
+
+      ctx.beginPath()
+      ctx.moveTo(start.x * width, start.y * height)
+      ctx.lineTo(end.x * width, end.y * height)
+      ctx.stroke()
     }
-
-    ctx.beginPath()
-    ctx.moveTo(start.x * width, start.y * height)
-    ctx.lineTo(end.x * width, end.y * height)
-    ctx.stroke()
   }
 
-  const radius = Math.max(3, width / 180)
-  for (const point of landmarks) {
-    ctx.beginPath()
-    ctx.arc(point.x * width, point.y * height, radius, 0, Math.PI * 2)
-    ctx.fill()
-  }
+  // Square joints; fingertips (4, 8, 12, 16, 20) glow gold.
+  const size = Math.max(7, Math.round(width / 85))
+  const tips = new Set([4, 8, 12, 16, 20])
+  landmarks.forEach((point, i) => {
+    const x = Math.round(point.x * width - size / 2)
+    const y = Math.round(point.y * height - size / 2)
+    ctx.fillStyle = '#130b3a'
+    ctx.fillRect(x - 2, y - 2, size + 4, size + 4)
+    ctx.fillStyle = tips.has(i) ? '#ffd23f' : '#ff6fb5'
+    ctx.fillRect(x, y, size, size)
+  })
 }
 
 /**

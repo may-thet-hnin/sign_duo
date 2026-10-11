@@ -8,7 +8,12 @@ import useHandTracking from '../hooks/useHandTracking.js'
  * @param {string | undefined} deviceId  Optional camera id for two-player mode
  * @param {(landmarks: {x:number,y:number,z:number}[] | null) => void} onLandmarks
  */
-export default function Camera({ deviceId, onLandmarks }) {
+export default function Camera({ deviceId, onLandmarks, onStatus }) {
+  // A device change gets fresh state and fully tears down the previous session.
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onLandmarks={onLandmarks} onStatus={onStatus} />
+}
+
+function CameraSession({ deviceId, onLandmarks, onStatus }) {
   const videoRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraLoading, setCameraLoading] = useState(true)
@@ -17,10 +22,7 @@ export default function Camera({ deviceId, onLandmarks }) {
   useEffect(() => {
     let cancelled = false
     let stream
-
-    setCameraReady(false)
-    setCameraLoading(true)
-    setCameraError(null)
+    const video = videoRef.current
 
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -51,7 +53,6 @@ export default function Camera({ deviceId, onLandmarks }) {
           return
         }
 
-        const video = videoRef.current
         if (!video) {
           stream.getTracks().forEach((track) => track.stop())
           return
@@ -65,6 +66,7 @@ export default function Camera({ deviceId, onLandmarks }) {
           setCameraLoading(false)
         }
       } catch (err) {
+        stream?.getTracks().forEach((track) => track.stop())
         if (!cancelled) {
           const denied = err?.name === 'NotAllowedError'
           setCameraError(
@@ -77,11 +79,11 @@ export default function Camera({ deviceId, onLandmarks }) {
       }
     }
 
-    startCamera()
+    // Async startup also allows StrictMode cleanup before requesting a stream.
+    Promise.resolve().then(() => { if (!cancelled) startCamera() })
 
     return () => {
       cancelled = true
-      const video = videoRef.current
       if (video) {
         video.srcObject = null
       }
@@ -108,6 +110,10 @@ export default function Camera({ deviceId, onLandmarks }) {
   const error = cameraError || modelError
   const loading = !error && (cameraLoading || (cameraReady && !modelReady))
 
+  useEffect(() => {
+    onStatus?.({ ready: cameraReady && modelReady && !error, error })
+  }, [cameraReady, modelReady, error, onStatus])
+
   let statusMessage = ''
   if (cameraLoading) {
     statusMessage = 'Starting camera…'
@@ -117,7 +123,6 @@ export default function Camera({ deviceId, onLandmarks }) {
 
   return (
     <div className="sd-camera">
-      <style>{cameraStyles}</style>
       <div className="sd-camera__frame">
         <video
           ref={videoRef}
@@ -127,6 +132,7 @@ export default function Camera({ deviceId, onLandmarks }) {
           autoPlay
         />
         <HandOverlay videoRef={videoRef} landmarks={landmarks} />
+        {cameraReady && modelReady && !error && <span className="sd-camera__live">Tracking</span>}
 
         {loading && (
           <div className="sd-camera__status" role="status">
@@ -144,57 +150,3 @@ export default function Camera({ deviceId, onLandmarks }) {
   )
 }
 
-const cameraStyles = `
-  .sd-camera {
-    width: 100%;
-    max-width: 720px;
-    margin: 0 auto;
-  }
-
-  .sd-camera__frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    overflow: hidden;
-    border-radius: 16px;
-    background: #111318;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
-  }
-
-  .sd-camera__video,
-  .sd-hand-overlay {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    transform: scaleX(-1);
-  }
-
-  .sd-camera__video {
-    background: #111318;
-  }
-
-  .sd-hand-overlay {
-    pointer-events: none;
-  }
-
-  .sd-camera__status {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    text-align: center;
-    color: #f8fafc;
-    background: rgba(17, 19, 24, 0.72);
-    font-size: 1rem;
-  }
-
-  .sd-camera__status--error {
-    color: #fecaca;
-  }
-`

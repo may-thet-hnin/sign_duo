@@ -1,63 +1,161 @@
-# Sign Duo
+<div align="center">
 
-Sign Duo teaches users the letters of ASL and checks accuracy using computer vision. After teaching users ASL, they have the option to practice speed and accuracy alone, or with a friend live through two webcams in a "Signs per minute" competition.
+# 🤟 SignDuo
 
-## Tech Stack
-- JavaScript/React
-- Node.js
-- [Google Media Pipe](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) for the computer vision
-- Local ONNX Runtime Web ASL landmark MLP ([nocontextdoruk/asl-landmark-mlp](https://huggingface.co/nocontextdoruk/asl-landmark-mlp)) for 16 static letters (A B C D E F I L M N O R S V W Y), plus temporal hand-geometry motion practice for HELLO/YES/NO. HELLO is a labeled simplified motion exercise. See [the model audit](docs/model-audit.md) for why other letters are not offered.
-- [Camo App](https://camo.com/) for the second webcam (1v1 "signs per minute" contest)
+### Fingerspell. Race. Learn.
 
+**A webcam-powered ASL fingerspelling learning game where your hands become the keyboard.**
 
-## Design system: smoked liquid glass over a 16-bit dusk
+Inspired by the fast-paced feel of typing races, SignDuo combines guided practice, real-time computer vision, and local head-to-head competition.
 
-The UI is a deliberate blend of two ideas:
+<!-- Add a screenshot or GIF of your finished app here -->
+<!-- ![SignDuo demo](docs/images/demo.gif) -->
 
-- **Liquid glass**: translucent, blurred, specular panels (`.glass` in `src/styles/glass.css`) floating over a
-  moving backdrop (`Scenery.jsx`: drifting pixel clouds, stars, colour blobs, stepped hills) so the blur has
-  something to refract.
-- **Retro video game**: Press Start 2P + Pixelify Sans, hand-drawn pixel sprites (`src/utils/sprites.js`, rendered by
-  `Pixel.jsx`), arcade-key buttons with a pressable depth edge, segmented health/progress bars, CRT-style camera
-  viewfinders, `steps()` animation, and dialog-box feedback.
+**[Live Demo](YOUR_DEPLOYED_URL)** · **[Demo Video](YOUR_DEMO_VIDEO_URL)**
 
-Files: `src/index.css` (tokens + scenery), `src/styles/glass.css` (primitives), `src/App.css` (screens).
-Fonts load from Google Fonts in `index.html`; self-host them if you need offline use. `prefers-reduced-motion` is respected.
-Race scoring and the pixel/glass design are preserved.
+</div>
 
-## Learning Mode
+> **Hackathon project:** Built to make beginner ASL fingerspelling practice more interactive through learning challenges and friendly competition.
 
-Six lessons teach small groups of signs: A/B/L, C/D/I, V/W/Y, E/S/M/N, O/F/R, and HELLO/YES/NO.
-Each includes guided references, camera practice, and knowledge checks. Static
-letters require about 900 ms of matching predictions plus sample/agreement
-validation; words use motion milestones instead of a stationary hold. Each lesson
-saves its own progress in localStorage. A lesson you have opened shows Restart lesson
-and Continue; one you have never opened shows Start lesson. Existing
-A/B/L checkpoints migrate into Lesson 1.
+## 💡 The Problem
 
-Run `npm run dev`, then choose **Start learning**. Run `npm test`, `npm run lint`,
-and `npm run build` for automated checks.
+Learning fingerspelling takes repetition, but it can be hard to get immediate feedback while practicing alone. Traditional drills may also lack the motivation and excitement of games.
 
-See [Learning Mode implementation and testing report](docs/learning-mode.md) for
-recognition limitations, file changes, validation results, and the manual test checklist.
+## 🚀 Our Solution
 
-The Alphabet and Basic Words sections contain lesson groups, with no individual
-alphabet practice tabs/cards. Choose Alphabet, Basic Words or Mixed in race setup
-for either mode. See [recognition and lesson fixes](docs/recognition-and-lessons-fixes.md)
-for root causes, changed files, validation and remaining webcam checks, and
-[expanded signs](docs/expanded-signs.md) for the sign practice checklist.
+**SignDuo turns fingerspelling practice into a speed challenge.** Using a webcam, learners practice supported ASL handshapes, receive real-time recognition feedback, and test their skills solo or against a friend in a split-screen race. Instead of typing letters on a keyboard, players form handshapes in front of the camera.
 
-## Competition
+## ✨ Features
 
-Choose 30/60/90/120 seconds before starting (default 60). The countdown begins after
-all cameras and recognition models are ready. Each race draws a new random sequence
-from the chosen pool (Alphabet, Basic Words or Mixed) and keeps adding signs until
-the timer reaches zero. A sign never repeats within the last few targets. E, M and N
-are left out of races for now. Each correct sign scores 1 point. Each player can skip up
-to 3 signs per race with their Skip button (0 points, no penalty); skips never pause
-the main timer. In Duo, both players get the same sequence and
-advance (and skip) independently; the higher score at zero wins, then fewer mistakes,
-otherwise it is a tie. Solo keeps five hearts, and losing
-the last heart ends the run early. See [competition fixes and browser
-checklist](docs/competition-fixes.md) for the B compatibility path and validation limits.
+### 📚 Guided Learning
+- **Six lessons** group supported fingerspelling letters and basic-word motion exercises.
+- Guided references, webcam practice, and knowledge checks help users learn before racing.
+- Lessons save progress locally. Previously opened lessons offer **Continue** or **Restart lesson**; unopened lessons offer **Start lesson**.
+- Static letters require a sustained, validated prediction (approximately 900 ms in lessons); word exercises use motion milestones.
 
+### ⚡ Solo Speed Challenge
+- Choose a **30-, 60-, 90-, or 120-second** round.
+- Select **Alphabet**, **Basic Words**, or **Mixed** prompts.
+- Race through a continuously generated sequence until the timer runs out.
+- Earn one point per correct sign. Solo players start with **five hearts**; running out ends the round early.
+
+### 🆚 Duo Competition
+- Two players compete locally using **two webcams**, with [Camo](https://camo.com/) as an option for connecting a phone as the second camera.
+- Both players receive the **same prompt sequence**, but progress independently.
+- The higher score when time expires wins; **fewer mistakes** breaks a score tie. If both remain equal, the race is a tie.
+- Each player can **skip up to three prompts per race**, without gaining points or pausing the timer.
+
+### 🎨 Arcade-Inspired Interface
+- **Smoked liquid-glass panels** layered over a moving pixel-art dusk landscape.
+- Retro typography, pixel sprites, animated controls, segmented progress bars, and camera viewfinders.
+- Reduced-motion preferences are respected.
+
+## 🧠 How It Works
+
+```text
+Webcam video
+    ↓
+Google MediaPipe Hand Landmarker
+    ↓
+Hand landmark coordinates
+    ↓
+Local ONNX model + motion/geometry checks
+    ↓
+Validated letter or motion-exercise progress
+    ↓
+Lesson feedback or race scoring
+```
+
+MediaPipe tracks hand landmarks in the browser. A local [ASL landmark MLP model](https://huggingface.co/nocontextdoruk/asl-landmark-mlp), run with ONNX Runtime Web, classifies **16 supported static letters**: **A, B, C, D, E, F, I, L, M, N, O, R, S, V, W, Y**. Temporal hand-geometry rules support **HELLO, YES, and NO** motion-practice activities.
+
+**Scope note:** The HELLO activity is a **simplified, labeled motion exercise**, and the app is **not a complete ASL interpreter**. Fingerspelling and full signed languages involve more than static handshapes. See [model audit](docs/model-audit.md) for coverage and limitations.
+
+## 🛠️ Tech Stack
+
+| Technology | Role |
+|---|---|
+| **React + JavaScript** | Interactive web application |
+| **Node.js** | Development tooling |
+| **Google MediaPipe Hand Landmarker** | Webcam-based hand landmark tracking |
+| **ONNX Runtime Web** | Local model inference in the browser |
+| **ASL landmark MLP** | Supported static-letter classification |
+| **Camo** (optional) | Using a phone as a second webcam |
+
+## 🏁 Getting Started
+
+**Prerequisites:** Node.js and npm, a modern browser, and a webcam. Duo Mode requires two available camera feeds.
+
+```bash
+# Clone your repository
+git clone YOUR_REPOSITORY_URL
+cd YOUR_REPOSITORY_FOLDER
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+```
+
+Open the local address shown in the terminal, then allow webcam access. Choose **Start learning** to practice, or enter **Solo / Duo** competition to race.
+
+To run the project's checks:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+## 🎮 Competition Rules
+
+| Rule | Details |
+|---|---|
+| Round length | 30, 60, 90, or 120 seconds (default 60) |
+| Prompt categories | Alphabet, Basic Words, Mixed |
+| Sequence | Randomized for each race; continues until time expires |
+| Fairness | Duo players receive the same sequence |
+| Scoring | +1 per correct sign |
+| Skips | Up to 3 per player; no points, no time pause |
+| Solo | 5 hearts; the run ends when they are depleted |
+| Duo winner | Higher score, then fewer mistakes; otherwise tie |
+
+**Current race limitation:** **E, M, and N are excluded from competition**, even though they appear in supported lessons. Prompts avoid repeating the same recent targets.
+
+## 🧩 What We Built and Learned
+
+SignDuo combines two real-time tasks: interpreting camera landmarks and running a fair, responsive competitive game. Key engineering concerns include making predictions stable enough for scoring, keeping both players' states independent, and waiting for cameras and models to be ready before starting the countdown.
+
+The interface combines [liquid-glass styling](src/styles/glass.css) with [pixel-art scenery](src/index.css) and screen layouts in [`src/App.css`](src/App.css).
+
+For technical details and known testing limitations, see:
+- [Model audit](docs/model-audit.md)
+- [Learning Mode implementation and tests](docs/learning-mode.md)
+- [Expanded sign checklist](docs/expanded-signs.md)
+- [Recognition and lesson fixes](docs/recognition-and-lessons-fixes.md)
+- [Competition fixes and browser checklist](docs/competition-fixes.md)
+
+## 🔭 What's Next
+
+Potential extensions include expanding the recognized fingerspelling alphabet, evaluating accuracy with more users and camera environments, improving authentic ASL movement feedback with guidance from fluent signers, and allowing remote players to compete from separate devices.
+
+## 👥 Team
+
+<!-- Replace these placeholders with names and links before submitting. -->
+
+| Team member | Contribution |
+|---|---|
+| **[Name]** | MediaPipe / webcam tracking |
+| **[Name]** | ASL recognition and prediction validation |
+| **[Name]** | UI/UX and game screens |
+| **[Name]** | Game logic, integration, and deployment |
+
+---
+
+<div align="center">
+
+**SignDuo — Fingerspell. Race. Learn.** 🤟
+
+*An educational hackathon prototype for practicing a supported subset of ASL fingerspelling.*
+
+</div>

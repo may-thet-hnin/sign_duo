@@ -6,7 +6,7 @@ import PixelSprite from "./Pixel.jsx";
  * Props
  * - players:   [{ id, name, score, lives, maxLives, progress,
  *                 correct, attempts, bestStreak, timeSeconds }, ...]  (exactly two)
- * - winnerId:  optional. Overrides the automatic winner (score, then progress).
+ * - winnerId:  optional. Overrides the automatic winner; null is an explicit tie.
  * - onRematch: called when "Play again" is pressed
  * - onHome:    called when "Back to menu" is pressed (button hidden if omitted)
  */
@@ -28,7 +28,7 @@ function accuracy(p) {
 }
 
 function pickWinner(a, b, winnerId) {
-  if (winnerId) return a.id === winnerId ? a : b.id === winnerId ? b : null;
+  if (winnerId !== undefined) return a.id === winnerId ? a : b.id === winnerId ? b : null;
   if (a.score !== b.score) return a.score > b.score ? a : b;
   if (a.progress !== b.progress) return a.progress > b.progress ? a : b;
   return null; // tie

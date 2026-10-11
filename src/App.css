@@ -332,9 +332,10 @@
 .sd-solo-result .sd-home-actions { justify-content: center; margin-top: 22px; }
 
 /* ── Responsive ── */
-.sd-duration { margin: 0 0 24px; padding: 16px 20px; border-radius: var(--r-md); }
-.sd-duration legend { padding: 0 8px; color: var(--gold); }
-.sd-duration > div { display: flex; flex-wrap: wrap; gap: 12px; }
+.sd-duration { margin: 0 0 24px; padding: 20px 20px 24px; border-radius: var(--r-md); }
+.sd-duration-options { min-width: 0; margin: 0; padding: 0; border: 0; }
+.sd-duration legend { max-width: 100%; margin-bottom: 16px; padding: 0; color: var(--gold); }
+.sd-duration-options > div { display: flex; flex-wrap: wrap; gap: 16px 12px; }
 .sd-duration .selected { color: var(--ink); background: var(--gold); border-color: var(--gold); }
 
 /* Compact race layout: essential controls stay above secondary diagnostics. */

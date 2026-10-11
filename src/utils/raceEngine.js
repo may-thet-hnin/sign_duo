@@ -46,6 +46,7 @@ export class RaceEngine {
     this.startedAt = null;
     this.endedAt = null;
     this.endReason = null;
+    this.winnerId = null;
   }
 
   generateLetters(count) {
@@ -276,9 +277,12 @@ export class RaceEngine {
       return;
     }
 
-    // Versus ends early only when both players finish.
-    if (players.every((player) => player.finished)) {
-      this.end(now, "all_players_finished");
+    // Camera callbacks are processed sequentially. The first accepted completion
+    // wins, including callbacks with the same timestamp or React render batch.
+    const finisher = players.find((player) => player.finished);
+    if (finisher) {
+      this.winnerId = finisher.id;
+      this.end(now, "player_finished");
     }
   }
 
@@ -290,6 +294,15 @@ export class RaceEngine {
     this.status = "finished";
     this.endedAt = now;
     this.endReason = reason;
+
+    if (this.mode === 'versus' && this.winnerId === null) {
+      const ranking = this.getResults(now).ranking;
+      const [first, second] = ranking;
+      if (first && second && (first.competitionScore !== second.competitionScore ||
+          first.correct !== second.correct || first.spm !== second.spm)) {
+        this.winnerId = first.id;
+      }
+    }
 
     return this.getResults(now);
   }
@@ -341,6 +354,7 @@ export class RaceEngine {
 
   getSnapshot(now = this.clock()) {
     return {
+      raceId: this.id,
       mode: this.mode,
       status: this.status,
       durationSeconds: this.durationSeconds,
@@ -356,6 +370,8 @@ export class RaceEngine {
 
     const ranking = [...snapshot.players].sort((a, b) => {
       if (this.mode === "versus") {
+        if (a.id === this.winnerId) return -1;
+        if (b.id === this.winnerId) return 1;
         return (
           b.competitionScore - a.competitionScore ||
           b.correct - a.correct ||
@@ -372,13 +388,14 @@ export class RaceEngine {
     // In single-player, this is the player's result,
     // not a claim that they beat another competitor.
     const winner =
-      this.mode === "versus" && ranking.length === 2
-        ? ranking[0]
+      this.mode === "versus" && this.winnerId !== null
+        ? snapshot.players.find(player => player.id === this.winnerId)
         : null;
 
     return {
       ...snapshot,
       winner,
+      winnerId: this.winnerId,
       ranking,
       endReason: this.endReason,
     };

@@ -5,7 +5,6 @@ import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
 import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
-import RecognitionLab from './components/RecognitionLab.jsx';
 import { RACE_DURATIONS } from './recognition/config.js';
 import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
@@ -26,6 +25,7 @@ function asResultPlayer(player, snapshot) {
 
 export default function App() {
   const engineRef = useRef(null);
+  const timerRef = useRef(null);
   const readyCameras = useRef({});
   const [duration, setDuration] = useState(60);
   const [screen, setScreen] = useState('home');
@@ -38,6 +38,22 @@ export default function App() {
   const [recognition, setRecognition] = useState({});
   const [events, setEvents] = useState({ p1: 'Waiting for race', p2: 'Waiting for race' });
   const [error, setError] = useState('');
+
+  const stopRaceTimer = useCallback(() => {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }, []);
+
+  const publishRace = useCallback(engine => {
+    if (engineRef.current !== engine) return;
+    const snapshot = engine.getSnapshot();
+    if (snapshot.status === 'finished') {
+      stopRaceTimer();
+      setResults(engine.getResults());
+      setScreen('results');
+    }
+    setGameState(snapshot);
+  }, [stopRaceTimer]);
 
   async function findCameras() {
     try {
@@ -67,6 +83,7 @@ export default function App() {
       const engine = new RaceEngine({ mode, durationSeconds: duration, startingHearts: 5, penaltySeconds: 2, targetLetters: TEST_SEQUENCE });
       engine.addPlayer('p1', 'Player 1');
       if (mode === 'versus') engine.addPlayer('p2', 'Player 2');
+      stopRaceTimer();
       engineRef.current = engine;
       readyCameras.current = {};
       setRecognition({});
@@ -77,18 +94,20 @@ export default function App() {
 
   function submitAttempt(playerId, letter, simulated = false, recognitionResult = null) {
     const engine = engineRef.current;
-    if (!engine || engine.status !== 'running') return;
+    if (!engine || engine.id !== gameState?.raceId || engine.status !== 'running') return;
     const outcome = recognitionResult ? engine.submitRecognition(playerId, recognitionResult) : engine.submitLetter(playerId, letter);
-    if (!outcome.accepted) return;
+    // A late submission can end the race by timeout without being accepted.
+    if (!outcome.accepted) {
+      if (engine.status === 'finished') publishRace(engine);
+      return;
+    }
     setEvents(previous => ({ ...previous, [playerId]: `${simulated ? '[SIMULATED] ' : ''}${letter}: ${outcome.correct ? `Accepted! +1 · Next: ${outcome.nextTarget || 'Finished'}` : `Try again — expected ${outcome.target}`}` }));
-    const snapshot = engine.getSnapshot();
-    setGameState(snapshot);
-    if (snapshot.status === 'finished') { setResults(engine.getResults()); setScreen('results'); }
+    publishRace(engine);
   }
 
   const handleCameraStatus = useCallback((playerId, status) => {
     const engine = engineRef.current;
-    if (!engine || engine.status !== 'waiting') return;
+    if (!engine || engine.id !== gameState?.raceId || engine.status !== 'waiting') return;
     readyCameras.current[playerId] = status.ready;
     if (status.error) setEvents(previous => ({ ...previous, [playerId]: status.error }));
     if ([...engine.players.keys()].every(id => readyCameras.current[id])) {
@@ -96,28 +115,33 @@ export default function App() {
       setGameState(snapshot);
       setEvents({ p1: 'Show the target sign to begin.', p2: 'Show the target sign to begin.' });
     }
-  }, []);
+  }, [gameState?.raceId]);
 
   function handleRecognition(playerId, result) {
     const engine = engineRef.current;
-    if (!engine || !['waiting', 'running'].includes(engine.status)) return;
+    if (!engine || engine.id !== gameState?.raceId || !['waiting', 'running'].includes(engine.status)) return;
     setRecognition(previous => ({ ...previous, [playerId]: result }));
     if (engine.status === 'running' && result.isNew) submitAttempt(playerId, result.letter, false, result);
   }
 
   useEffect(() => {
     if (screen !== 'race' || gameState?.status !== 'running') return undefined;
+    const engine = engineRef.current;
+    if (!engine || engine.status !== 'running') return undefined;
     const timer = setInterval(() => {
-      const engine = engineRef.current;
-      if (!engine) return;
-      const snapshot = engine.updateTime();
-      setGameState(snapshot);
-      if (snapshot.status === 'finished') { setResults(engine.getResults()); setScreen('results'); }
+      if (engineRef.current !== engine || engine.status !== 'running') return;
+      engine.updateTime();
+      publishRace(engine);
     }, 250);
-    return () => clearInterval(timer);
-  }, [screen, gameState?.status]);
+    timerRef.current = timer;
+    return () => {
+      clearInterval(timer);
+      if (timerRef.current === timer) timerRef.current = null;
+    };
+  }, [screen, gameState?.status, gameState?.raceId, publishRace]);
 
   function goHome() {
+    stopRaceTimer();
     engineRef.current = null;
     setGameState(null); setResults(null); setRecognition({});
     setError(''); setScreen('home');
@@ -143,7 +167,6 @@ export default function App() {
           </div>
         </div>
         <HeroLens />
-        {import.meta.env.DEV && <button className="sd-button sd-button-secondary" onClick={() => setScreen('lab')}>Recognition evaluation</button>}
         <div className="sd-feature-grid">
           <article className="sd-feature glass"><PixelSprite name="A" scale={4} /><h3>Learn</h3><p>Guided letters, camera-verified practice and knowledge checks.</p></article>
           <article className="sd-feature glass"><PixelSprite name="flag" scale={5} /><h3>Solo</h3><p>Choose your race duration. Five hearts.</p></article>
@@ -151,8 +174,6 @@ export default function App() {
         </div>
         <p className="sd-hint">Live recognition currently supports A, B and L. Hold each sign steadily to complete camera practice.</p>
       </section>}
-
-      {screen === 'lab' && import.meta.env.DEV && <RecognitionLab onExit={goHome} />}
 
       {screen === 'learn' && <section className="sd-learn">
         <button className="sd-link" onClick={goHome}>Back to menu</button>
@@ -176,10 +197,12 @@ export default function App() {
             <span>Two webcams · head-to-head · Shared timer</span>
           </button>
         </div>
-        <fieldset className="sd-duration glass">
-          <legend>Choose your race duration</legend>
-          <div>{RACE_DURATIONS.map(seconds => <button type="button" key={seconds} className={`sd-button sd-button-secondary ${duration === seconds ? 'selected' : ''}`} aria-pressed={duration === seconds} onClick={() => setDuration(seconds)}>{seconds}s</button>)}</div>
-        </fieldset>
+        <div className="sd-duration glass">
+          <fieldset className="sd-duration-options">
+            <legend>Choose your race duration</legend>
+            <div>{RACE_DURATIONS.map(seconds => <button type="button" key={seconds} className={`sd-button sd-button-secondary ${duration === seconds ? 'selected' : ''}`} aria-pressed={duration === seconds} onClick={() => setDuration(seconds)}>{seconds}s</button>)}</div>
+          </fieldset>
+        </div>
         <div className="sd-setup-box glass">
           <h2>Camera setup</h2>
           <button className="sd-button sd-button-secondary" onClick={findCameras}>Find cameras / allow access</button>
@@ -191,10 +214,10 @@ export default function App() {
         <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
       </section>}
 
-      {screen === 'race' && gameState && <RaceScreen gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} sequence={TEST_SEQUENCE} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
+      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} sequence={TEST_SEQUENCE} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onExit={goHome} />}
 
       {screen === 'results' && results && (mode === 'versus'
-        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.ranking[0].competitionScore === results.ranking[1].competitionScore ? null : results.winner?.id} onRematch={startRace} onHome={goHome} />
+        ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.winnerId} onRematch={startRace} onHome={goHome} />
         : <section className="sd-solo-result glass">
             <PixelSprite name="trophy" scale={7} className="sd-trophy" />
             <h1 className="sd-page-title">Great practice!</h1>

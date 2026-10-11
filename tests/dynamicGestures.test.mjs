@@ -196,3 +196,26 @@ test('Yes uses world-landmark depth, so a normal nod counts even when image dept
   const progress = nodFrames(30).map(f => d.update(f.image, f.now, f.world)).find(r => r.motion?.peakDegrees >= 20);
   assert.equal(progress.motion.depth, 'world', 'diagnostics report the bend and its depth source');
 });
+
+test('HELLO accepts the flat B-hand salute and fingertips beyond the top of the frame', async () => {
+  const sweep = (shape, { top = 0 } = {}) => Array.from({ length: 40 }, (_, k) => {
+    const m = Math.min(1, Math.max(0, (k - 8) / 18));
+    return { now: k * 33, points: cameraPoints(pose(shape), { dx: m * 1.3, dy: top + m * .3 }) };
+  });
+  for (const [label, frames] of [['thumb tucked', sweep('B')], ['fingertips above the frame', sweep('OPEN', { top: -6.3 })]]) {
+    if (label.startsWith('fingertips')) assert.ok(frames[0].points.some(p => p.y < 0), 'test really starts out of frame');
+    let now = 0; const results = [];
+    const c = new RecognitionController({ clock: () => now, infer: async () => { throw new Error('words never use the model'); }, onResult: r => results.push(r) });
+    c.setTarget('HELLO'); c.setChallenge(label);
+    for (const f of frames) { now = f.now; await c.process(f.points, now); }
+    assert.deepEqual(results.filter(r => r.isNew).map(r => r.letter), ['HELLO'], label);
+    c.dispose();
+  }
+  // Letters still need the whole hand in view.
+  let now = 0; const letters = [];
+  const c = new RecognitionController({ clock: () => now, infer: async () => { throw new Error('unreachable'); }, onResult: r => letters.push(r.status) });
+  c.setTarget('B');
+  await c.process(sweep('OPEN', { top: -6.3 })[0].points, 0);
+  assert.deepEqual(letters, ['out-of-frame']);
+  c.dispose();
+});

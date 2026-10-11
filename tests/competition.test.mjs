@@ -182,6 +182,21 @@ test('feedback explains tentative, wrong, repeated, absent and error states with
   assert.equal(raceFeedback(player, { status: 'no-hand' }), 'Show your hand to the camera.');
   assert.match(raceFeedback(player, { status: 'tentative', candidate: 'B' }), /Hold B/);
   assert.match(raceFeedback(player, { candidate: 'A' }), /Detected A/);
+  assert.equal(raceFeedback(player, { status: 'stable', letter: 'A', candidate: 'A', lockedLetter: 'A' }), 'You already got A. Now make B.');
   assert.match(raceFeedback(player, { status: 'stable', letter: 'B', lockedLetter: 'B' }), /Release/);
   assert.match(raceFeedback(player, { status: 'error', error: 'Failed' }), /Failed/);
+});
+
+test('holding an accepted sign through the success pause never counts again or against the next sign', async () => {
+  let now = 0; const results = [];
+  const c = new RecognitionController({ clock: () => now, infer: async () => ({ logits: classes.map(x => x === 'B' ? 20 : -20), classes, latencyMs: 1 }), onResult: r => results.push(r) });
+  c.setChallenge('p1:0');
+  for (now = 0; now <= 1000; now += 100) await c.process(bFixture(), now);
+  assert.deepEqual(results.filter(r => r.isNew).map(r => r.letter), ['B']);
+  // Next target, then 1.2 s with recognition paused (no frames), then the player still holds B.
+  c.setChallenge('p1:1');
+  for (now = 2300; now <= 5000; now += 100) await c.process(bFixture(), now);
+  assert.equal(results.filter(r => r.isNew).length, 1, 'the held B is neither re-scored nor a mistake');
+  assert.equal(results.at(-1).lockedLetter, 'B');
+  c.dispose();
 });

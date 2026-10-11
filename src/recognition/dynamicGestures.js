@@ -79,7 +79,9 @@ function classify(f) {
     Math.abs(indexGap - middleGap) < .55;
   return {
     fist: [i, m, r, p].every(curled) && (f.thumbClosed || f.distance(4, 9) < .9),
-    open: [i, m, r, p].every(extended) && (f.thumbOpen || f.thumbAbducted || f.distance(4, 5) > .85),
+    // Any flat hand: thumb spread, alongside or tucked. The ASL HELLO salute is a
+    // flat B-hand, and requiring a spread thumb rejected it every time.
+    open: [i, m, r, p].every(extended),
     noBase,
     noOpen: noBase && extended(i) && extended(m) && indexGap > .7 && middleGap > .7,
     noClosed: noBase && indexGap < .5 && middleGap < .5,

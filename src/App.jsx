@@ -5,7 +5,8 @@ import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
 import HeroLens from './components/HeroLens.jsx';
 import ResultsScreen from './components/ResultsScreen.jsx';
-import { RACE_DURATIONS, COMPETITION_POOLS, ALPHABET_SIGNS, WORD_SIGNS, POINTS_PER_SIGN } from './recognition/config.js';
+import ResultsReveal from './components/ResultsReveal.jsx';
+import { RACE_DURATIONS, COMPETITION_POOLS, ALPHABET_SIGNS, WORD_SIGNS, POINTS_PER_SIGN, SUCCESS_PAUSE_MS } from './recognition/config.js';
 import { RaceEngine } from './utils/raceEngine.js';
 import './App.css';
 
@@ -33,6 +34,9 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [recognition, setRecognition] = useState({});
   const [events, setEvents] = useState({ p1: 'Waiting for race', p2: 'Waiting for race' });
+  // Per-player success burst; that player's recognition pauses while it shows.
+  const [celebrations, setCelebrations] = useState({});
+  const celebrationId = useRef(0);
   const [error, setError] = useState('');
 
   const stopRaceTimer = useCallback(() => {
@@ -84,6 +88,7 @@ export default function App() {
       engineRef.current = engine;
       readyCameras.current = {};
       setRecognition({});
+      setCelebrations({});
       setEvents({ p1: 'Preparing camera and recognition…', p2: 'Preparing camera and recognition…' });
       setResults(null); setError(''); setGameState(engine.getSnapshot()); setScreen('race');
     } catch (err) { setError(err.message); }
@@ -99,6 +104,11 @@ export default function App() {
       return;
     }
     setEvents(previous => ({ ...previous, [playerId]: `${simulated ? '[SIMULATED] ' : ''}${letter}: ${outcome.correct ? `Accepted! +${POINTS_PER_SIGN} · Next: ${outcome.nextTarget || '—'}` : `Try again — expected ${outcome.target}`}` }));
+    if (outcome.correct) {
+      const id = ++celebrationId.current;
+      setCelebrations(previous => ({ ...previous, [playerId]: { id, sign: letter, next: outcome.nextTarget } }));
+      setTimeout(() => setCelebrations(previous => previous[playerId]?.id === id ? { ...previous, [playerId]: null } : previous), SUCCESS_PAUSE_MS);
+    }
     publishRace(engine);
   }
 
@@ -153,7 +163,7 @@ export default function App() {
   function goHome() {
     stopRaceTimer();
     engineRef.current = null;
-    setGameState(null); setResults(null); setRecognition({});
+    setGameState(null); setResults(null); setRecognition({}); setCelebrations({});
     setError(''); setScreen('home');
   }
 
@@ -233,9 +243,12 @@ export default function App() {
         <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
       </section>}
 
-      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onSkip={skipTarget} onExit={goHome} />}
+      {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} celebrations={celebrations} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onSkip={skipTarget} onExit={goHome} />}
 
-      {screen === 'results' && results && (mode === 'versus'
+      {screen === 'results' && results && <ResultsReveal key={results.raceId}
+        title={results.endReason === 'out_of_hearts' ? 'OUT OF HEARTS!' : 'TIME UP!'}
+        subtitle={mode === 'versus' ? 'Final scores…' : `Score: ${results.players[0].score.toLocaleString()}`}>
+        {mode === 'versus'
         ? <ResultsScreen durationSeconds={results.durationSeconds} players={results.ranking.map(p => asResultPlayer(p, results))} winnerId={results.winnerId} winReason={results.winReason} onRematch={startRace} onHome={goHome} />
         : <section className="sd-solo-result glass">
             <PixelSprite name="trophy" scale={7} className="sd-trophy" />
@@ -249,7 +262,8 @@ export default function App() {
               <div><dt>Signs per minute</dt><dd>{results.players[0].spm}</dd></div>
             </dl>
             <div className="sd-home-actions"><button className="sd-button sd-button-start" onClick={startRace}>Play again</button><button className="sd-button sd-button-secondary" onClick={goHome}>Back to menu</button></div>
-          </section>)}
+          </section>}
+      </ResultsReveal>}
       <p className="sd-hint">Recognition model: <a href="https://huggingface.co/nocontextdoruk/asl-landmark-mlp" target="_blank" rel="noreferrer">Doruk Doğular · CC BY-NC 4.0</a>. Dataset: <a href="https://data.mendeley.com/datasets/j4y5w2c8w9/1" target="_blank" rel="noreferrer">Pranto et al., ASL-HG (2026) · CC BY 4.0</a>.</p>
     </main>
   </>;

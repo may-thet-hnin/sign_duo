@@ -79,7 +79,9 @@ test('NO can repeat after reopening both fingers without losing hand tracking', 
 });
 
 test('every offered letter comes from the model and keeps the hold gate', async () => {
-  for (const letter of ALPHABET_SIGNS) {
+  // D/L and A/S also pass a thumb-geometry check (tests/confusablePairs.test.mjs),
+  // which this generic open-hand pose would fail.
+  for (const letter of ALPHABET_SIGNS.filter(l => !['D', 'L', 'A', 'S'].includes(l))) {
     let now = 0; const results = [];
     const controller = new RecognitionController({ infer: async () => inference(letter), clock: () => now, onResult: r => results.push(r) });
     controller.setChallenge(letter); controller.setTarget(letter);

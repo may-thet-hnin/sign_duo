@@ -2,6 +2,7 @@ import { normalizeLandmarks, decodePrediction, canonicalHand } from './preproces
 import { TemporalSmoother } from './temporalSmoothing.js';
 import { RECOGNITION_CONFIG, SUPPORTED_SIGNS, WORD_SIGNS } from './config.js';
 import { DynamicGestureRecognizer } from './dynamicGestures.js';
+import { resolveConfusablePair } from './confusablePairs.js';
 import { metricLandmarks } from '../utils/handGeometry.js';
 let nextControllerId = 0;
 
@@ -41,7 +42,11 @@ export class RecognitionController {
   async process(points, now, { aspectRatio = 1, handedness = null, world = null } = {}) {
     if (this.disposed) return;
     if (!points) { this.invalidate('no-hand', now); return; }
-    if (points.some(p => !p || p.x <= 0 || p.x >= 1 || p.y <= 0 || p.y >= 1)) { this.invalidate('out-of-frame', now); return; }
+    // Letters need the whole hand. Word motions only need the wrist and knuckles:
+    // HELLO starts at the forehead, where fingertips often leave the top of the frame.
+    const word = WORD_SIGNS.includes(this.targetSign);
+    const outside = p => !p || p.x <= 0 || p.x >= 1 || p.y <= 0 || p.y >= 1;
+    if (word ? [0, 5, 9, 13, 17].some(i => outside(points[i])) : points.some(outside)) { this.invalidate('out-of-frame', now); return; }
     // MediaPipe x/z use width units and y uses height units. Equal axes keep
     // a widescreen hand from looking squashed (16:9 raw input: 94% -> 81%).
     const metric = metricLandmarks(points, aspectRatio);
@@ -57,7 +62,8 @@ export class RecognitionController {
         top: [], raw: null });
       return;
     }
-    const input = normalizeLandmarks(canonicalHand(metric, handedness));
+    const canonical = canonicalHand(metric, handedness);
+    const input = normalizeLandmarks(canonical);
     if (!input) { this.invalidate('unknown', now); return; }
     if (this.busy || now - this.lastAt < this.config.intervalMs) return;
     this.busy = true; this.lastAt = now;
@@ -67,11 +73,12 @@ export class RecognitionController {
       const output = await this.infer(input);
       if (this.disposed || generation !== this.generation) return;
       if (this.clock() - now > this.config.maxGapMs) { this.invalidate('unknown', this.clock()); return; }
-      const prediction = decodePrediction(output.logits, output.classes, this.config, this.allowlist);
+      const prediction = resolveConfusablePair(decodePrediction(output.logits, output.classes, this.config, this.allowlist),
+        canonical, this.config, this.allowlist);
       const smoothed = this.smoother.update(prediction.letter, now);
       const eventId = smoothed.isNew ? `${this.id}:${++this.eventNumber}` : null;
       this.emit({ ...prediction, ...smoothed, timestamp: now, handDetected: true, challengeId, eventId,
-        handedness, latencyMs: output.latencyMs });
+        handedness, latencyMs: output.latencyMs, ...(prediction.pairCheck && { method: `ONNX MLP + ${prediction.pairCheck}` }) });
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;
       this.smoother.reset(); this.emit({ status: 'error', letter: null, progress: 0, isNew: false, error: error.message });

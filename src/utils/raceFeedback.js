@@ -10,6 +10,8 @@ export function raceFeedback(player, result) {
   if (result.status === 'tracking-paused') return 'Tracking paused. Show your hand again.';
   const detected = result.candidate || result.letter;
   if (!detected) return 'I can see your hand, but cannot recognize the sign yet.';
+  // Still holding the sign that was just accepted: say so, rather than suggesting a mistake.
+  if (detected !== player.currentTarget && result.lockedLetter === detected) return `You already got ${detected}. Now make ${player.currentTarget}.`;
   if (detected !== player.currentTarget) return `Detected ${detected} — target ${player.currentTarget}.`;
   if (result.lockedLetter === player.currentTarget && !result.isNew) return player.currentTarget === 'NO'
     ? 'Reopen both fingers and pause, then close them toward the thumb again.'

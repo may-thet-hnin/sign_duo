@@ -124,7 +124,7 @@ export const WORD_LESSONS = [
   {
     id: 'hello', letter: 'HELLO', name: 'HELLO · simplified motion practice', simplified: true,
     referenceUrl: 'https://www.lifeprint.com/asl101/pages-signs/h/hello.htm',
-    steps: ['Open all four fingers and your thumb.', 'Move the open hand smoothly outward to the side.', 'Sweep about one palm width. Release your hand before repeating.'],
+    steps: ['Hold your hand flat with all four fingers straight. The thumb can be tucked or open.', 'Move the flat hand smoothly outward to the side, for example from your forehead.', 'Sweep about one palm width. Release your hand before repeating.'],
     movement: 'Open hand → sideways outward sweep.',
     quizCue: 'Which practice gesture uses an open hand sweeping outward to the side?',
     mistake: 'A stationary open palm does not count. This exercise cannot check forehead position.',

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import Camera from './Camera.jsx';
 import PixelSprite from './Pixel.jsx';
 import RecognitionDebug from './RecognitionDebug.jsx';
+import SuccessBurst from './SuccessBurst.jsx';
 import { SKIPS_PER_RACE, SUPPORTED_SIGNS } from '../recognition/config.js';
 import { raceFeedback } from '../utils/raceFeedback.js';
 import { signContent } from '../utils/lessonContent.js';
@@ -14,7 +15,7 @@ function attemptText(player, event) {
   return event;
 }
 
-function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, recognition, event, onRecognition, onCameraStatus, onSimulate, onSkip }) {
+function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, recognition, event, celebration, onRecognition, onCameraStatus, onSimulate, onSkip }) {
   const cameraStatus = useCallback(next => onCameraStatus(player.id, next), [onCameraStatus, player.id]);
   const detected = recognition?.candidate || recognition?.letter;
   const progress = recognitionProgress(recognition, player.currentTarget, player.challengeId).progress;
@@ -25,7 +26,7 @@ function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, re
       <span className="sd-badge">{player.hearts === null ? `${player.score.toLocaleString()} pts` : <><PixelSprite name="heart" scale={2} />×{player.hearts}</>}</span>
     </div>
     <div className="sd-player-body">
-      <div className={`sd-target${sign?.movement ? ' sd-target--word' : ''}`} aria-label={`${player.name} current target`}>
+      <div className={`sd-target${sign?.movement ? ' sd-target--word' : ''}${celebration ? ' sd-target--success' : ''}`} aria-label={`${player.name} current target`}>
         <span>Make this sign</span><strong>{player.currentTarget || '✓'}</strong>
         <span>Detected: <b>{detected || '—'}</b></span>
         <span className="sd-recognition-state">{recognition?.status === 'stable' ? sign?.movement ? 'Motion detected' : 'Stable handshape' : recognition?.status === 'tentative' ? sign?.movement ? 'Follow the movement' : 'Tentative · hold steady' : 'Looking for a sign'}</span>
@@ -33,14 +34,15 @@ function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, re
       </div>
       <div className="sd-race-camera">
         {!player.finished && ['waiting', 'running'].includes(status) && <Camera deviceId={cameraId || undefined}
-          challengeId={player.challengeId} targetSign={player.currentTarget} recognitionActive={status === 'running'}
+          challengeId={player.challengeId} targetSign={player.currentTarget} recognitionActive={status === 'running' && !celebration}
           allowlist={SUPPORTED_SIGNS.competition}
           onRecognition={next => onRecognition(player.id, next)} onStatus={cameraStatus} />}
+        {celebration && <SuccessBurst key={celebration.id} sign={celebration.sign} next={celebration.next} />}
         {player.finished && <div className="sd-player-finished">Out of hearts</div>}
         <p className="sd-caption">{deviceLabel || 'Default camera'}</p>
       </div>
     </div>
-    <p className="sd-feedback" role="status">{status === 'waiting' ? recognition?.error || event || 'Preparing cameras…' : raceFeedback(player, recognition)}</p>
+    <p className="sd-feedback" role="status">{status === 'waiting' ? recognition?.error || event || 'Preparing cameras…' : celebration ? `Correct! Get ready for ${celebration.next ?? 'the next sign'}…` : raceFeedback(player, recognition)}</p>
     <div className="sd-hold-progress" role="progressbar" aria-label={`${player.name} ${sign?.movement ? 'motion completion' : 'sign stability'}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}><span style={{ width: `${progress * 100}%` }} /></div>
     {status === 'running' && !player.finished && <div className="sd-skip">
       <span>Stuck on this sign?</span>
@@ -80,7 +82,7 @@ function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, re
   </article>;
 }
 
-export default function RaceScreen({ gameState, mode, cameraIds, devices, recognition, events, onRecognition, onCameraStatus, onSimulate, onSkip, onExit }) {
+export default function RaceScreen({ gameState, mode, cameraIds, devices, recognition, events, celebrations = {}, onRecognition, onCameraStatus, onSimulate, onSkip, onExit }) {
   const seconds = Math.max(0, Math.ceil(gameState.remainingSeconds));
   return <section className={`sd-race sd-race--${mode}`}>
     <header className="sd-race-header glass">
@@ -92,7 +94,7 @@ export default function RaceScreen({ gameState, mode, cameraIds, devices, recogn
     <div className="sd-race-grid glass">
       {gameState.players.map((player, index) => <RacePlayer key={player.id} player={player} index={index} status={gameState.status}
         cameraId={cameraIds[player.id]} deviceLabel={devices.find(d => d.deviceId === cameraIds[player.id])?.label}
-        recognition={recognition[player.id]} event={events[player.id]} timeLeft={gameState.remainingSeconds / gameState.durationSeconds}
+        recognition={recognition[player.id]} event={events[player.id]} celebration={celebrations[player.id]} timeLeft={gameState.remainingSeconds / gameState.durationSeconds}
         onRecognition={onRecognition} onCameraStatus={onCameraStatus} onSimulate={onSimulate} onSkip={onSkip} />)}
     </div>
   </section>;

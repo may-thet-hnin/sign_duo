@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { normalizeLandmarks, canonicalHand, decodePrediction } from '../src/recognition/preprocessing.js';
+import { resolveConfusablePair } from '../src/recognition/confusablePairs.js';
 import { ALPHABET_SIGNS, RECOGNITION_CONFIG, SUPPORTED_SIGNS } from '../src/recognition/config.js';
 
 // Real MediaPipe landmarks from reference photos (one signer, not webcam).
@@ -19,9 +20,11 @@ async function evaluate({ canonical = true, allowlist = SUPPORTED_SIGNS.learning
     const results = [];
     for (const sample of samples) {
       const points = sample.points.map(([x, y, z]) => ({ x, y, z }));
-      const input = normalizeLandmarks(canonical ? canonicalHand(points, sample.handedness) : points);
-      const output = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', input, [1, 63]) });
-      const prediction = decodePrediction(output[session.outputNames[0]].data, classes, RECOGNITION_CONFIG, allowlist);
+      const hand = canonical ? canonicalHand(points, sample.handedness) : points;
+      const output = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', normalizeLandmarks(hand), [1, 63]) });
+      // The same decode and D/L, A/S thumb check the app uses.
+      const prediction = resolveConfusablePair(decodePrediction(output[session.outputNames[0]].data, classes, RECOGNITION_CONFIG, allowlist),
+        hand, RECOGNITION_CONFIG, allowlist);
       results.push({ ...sample, top: prediction.top[0].letter, accepted: prediction.letter });
     }
     return results;

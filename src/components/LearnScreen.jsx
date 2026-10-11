@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Camera from './Camera.jsx';
 import UnderstandingTest from './UnderstandingTest.jsx';
+import ResultsReveal from './ResultsReveal.jsx';
 import PixelSprite from './Pixel.jsx';
 import RecognitionDebug from './RecognitionDebug.jsx';
 import { COURSE_LESSONS, REFERENCE_URL } from '../utils/lessonContent.js';
@@ -169,6 +170,8 @@ export default function LearnScreen() {
   const [lessonId, setLessonId] = useState(COURSE_LESSONS[0].id);
   const [view, setView] = useState('dashboard');
   const [saveError, setSaveError] = useState(false);
+  // Lesson just finished in this session: its completion screen gets the celebration.
+  const [justCompleted, setJustCompleted] = useState(null);
   const headingRef = useRef(null);
   const lesson = COURSE_LESSONS.find(item => item.id === lessonId);
   const progress = course.lessons[lessonId];
@@ -201,6 +204,7 @@ export default function LearnScreen() {
     setCourse(old => updateLessonProgress(old, lessonId, update));
   }
   function openLesson(id) {
+    setJustCompleted(null);
     setCourse(old => updateLessonProgress(old, id, markAttempted));
     setLessonId(id);
     setView('lesson');
@@ -210,6 +214,9 @@ export default function LearnScreen() {
     openLesson(id);
   }
   function advance() {
+    // The celebration plays only when this click finishes the lesson, not when
+    // a completed lesson is reopened later.
+    if (progress.position + 1 === lesson.activityCount) setJustCompleted(lessonId);
     updateProgress(old => advanceProgress(old, lesson));
   }
 
@@ -273,7 +280,9 @@ export default function LearnScreen() {
       {position < lesson.practiceActivities && position % 2 === 1 && <Practice key={`${lessonId}:${position}`} sign={sign} onSuccess={letter => updateProgress(old => recordPractice(old, letter, lesson))} onContinue={advance} onSkip={() => updateProgress(old => skipPractice(old, lesson))} previouslyPassed={progress.practiced.includes(sign.letter)} />}
       {position >= lesson.practiceActivities && position < lesson.activityCount && <KnowledgeCheck key={`${lessonId}:${position}`} lesson={lesson} index={position - lesson.practiceActivities} savedAnswer={progress.answers[position - lesson.practiceActivities]}
         onSubmit={answer => updateProgress(old => recordAnswer(old, answer, lesson))} onContinue={advance} />}
-      {progress.completed && <article className="learn-panel learn-complete glass">
+      {progress.completed && <ResultsReveal key={`${lessonId}:${progress.completions}`} play={justCompleted === lessonId}
+        title="LESSON CLEAR!" subtitle={lesson.title}>
+      <article className="learn-panel learn-complete glass">
         <PixelSprite name="trophy" scale={7} /><h3>{lesson.title} complete.</h3>
         <p>{progress.practiced.length ? `You practiced ${progress.practiced.join(', ')} with the camera.` : 'You finished the lesson without camera practice.'} Keep practicing at a comfortable pace.</p>
         <div className="learn-signs">{progress.practiced.map(letter => <span className="learn-pill" key={letter}>{letter} ✓</span>)}</div>
@@ -281,7 +290,8 @@ export default function LearnScreen() {
         <p className="learn-score">Quiz score: {quizScore} / {lesson.quiz.length} ({Math.round(quizScore / lesson.quiz.length * 100)}%)</p>
         <p>{quizScore === lesson.quiz.length ? 'Excellent recall! Try these signs again in a race.' : 'Every review helps. Replay the lesson to build your recall.'}</p>
         <div className="learn-actions"><button className="sd-button" onClick={() => replay()}>Replay lesson</button><button className="sd-button sd-button-secondary" onClick={() => setView('dashboard')}>Back to lessons</button></div>
-      </article>}
+      </article>
+      </ResultsReveal>}
     </>}
   </section>;
 }

@@ -355,7 +355,7 @@
 .sd-race .sd-player-head h3 { font-size: 12px; }
 .sd-race .sd-badge { padding: 6px 9px; font-size: 11px; }
 .sd-player-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, .45fr); grid-template-areas: 'camera target'; align-items: stretch; gap: 18px; }
-.sd-race-camera { grid-area: camera; min-width: 0; }
+.sd-race-camera { grid-area: camera; min-width: 0; position: relative; }
 .sd-race .sd-target { grid-area: target; padding: 12px; gap: 6px; align-content: center; }
 .sd-race .sd-target strong { font-size: clamp(48px, 6vw, 72px); }
 .sd-race .sd-target--word strong { font-size: clamp(18px, 2.4vw, 32px); overflow-wrap: anywhere; }
@@ -411,7 +411,68 @@
   .sd-race .sd-mode-tag { font-size: 9px; }
   .sd-race .sd-small { font-size: 12px; padding: 9px; }
 }
+/* Results reveal: arcade "stage clear" banner, then the results rise in. */
+.sd-clear {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 14px;
+  text-align: center; cursor: pointer; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, rgba(19, 11, 58, .55), rgba(19, 11, 58, .9) 70%);
+  animation: sd-clear-out 1.7s ease-in forwards;
+}
+.sd-clear__banner {
+  font-family: var(--display); font-weight: 400; font-size: clamp(22px, 5vw, 46px); line-height: 1.2; color: var(--gold);
+  text-shadow: 4px 4px 0 var(--ink), 0 0 24px rgba(255, 210, 63, .45);
+  animation: sd-clear-in .4s steps(5) both;
+}
+.sd-clear__subtitle { font-size: 20px; color: #fff; text-shadow: 0 2px 0 var(--ink); animation: sd-clear-in .4s .15s steps(5) both; }
+.sd-clear__trophy { animation: sd-clear-trophy .6s steps(4) both, sd-bob .9s .6s steps(2) infinite; }
+.sd-clear__skip { margin-top: 10px; font-size: 13px; color: var(--text-soft); }
+.sd-clear__confetti { position: absolute; inset: 0; pointer-events: none; }
+.sd-clear__confetti i {
+  position: absolute; top: -16px; display: block; box-shadow: 0 0 0 2px var(--ink);
+  animation-name: sd-clear-fall; animation-timing-function: steps(10); animation-fill-mode: both;
+}
+.sd-reveal--hold > :first-child > * { opacity: 0; }
+.sd-reveal--rise > :first-child > * { animation: sd-clear-rise .45s ease-out both; }
+.sd-reveal--rise > :first-child > :nth-child(2) { animation-delay: 70ms; }
+.sd-reveal--rise > :first-child > :nth-child(3) { animation-delay: 140ms; }
+.sd-reveal--rise > :first-child > :nth-child(4) { animation-delay: 210ms; }
+.sd-reveal--rise > :first-child > :nth-child(5) { animation-delay: 280ms; }
+.sd-reveal--rise > :first-child > :nth-child(n + 6) { animation-delay: 350ms; }
+@keyframes sd-clear-in { from { opacity: 0; transform: translateY(-24px) scale(1.4); } to { opacity: 1; transform: none; } }
+@keyframes sd-clear-trophy { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes sd-clear-fall { from { transform: translate(0, 0); } to { transform: translate(var(--drift), 105vh); } }
+@keyframes sd-clear-out { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes sd-clear-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+/* Success burst: covers the camera while recognition pauses after a correct sign. */
+.sd-success-host { position: relative; }
+.sd-success {
+  position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: 8px;
+  pointer-events: none; border-radius: 12px; text-align: center; color: #fff;
+  background: radial-gradient(circle, rgba(19, 11, 58, .55) 0%, rgba(19, 11, 58, .78) 70%);
+  animation: sd-success-fade var(--success-ms, 1200ms) ease-out forwards;
+}
+.sd-success__ring {
+  position: absolute; top: 50%; left: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px;
+  border: 6px solid var(--mint); border-radius: 50%; animation: sd-success-ring .7s ease-out forwards;
+}
+.sd-success__check {
+  display: grid; place-content: center; width: 84px; height: 84px; border-radius: 50%; font-size: 48px; line-height: 1;
+  color: var(--ink); background: var(--mint); border: 3px solid var(--ink); box-shadow: 0 5px 0 var(--ink);
+  animation: sd-success-pop .45s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+.sd-success__sign { font-family: var(--display); font-weight: 400; font-size: clamp(14px, 2vw, 20px); color: var(--mint); text-shadow: 0 3px 0 var(--ink); }
+.sd-success__next { font-size: 18px; }
+.sd-success__next b { font-family: var(--display); font-weight: 400; color: var(--gold); }
+.sd-target.sd-target--success { border-color: var(--mint); box-shadow: 0 0 0 2px var(--mint); }
+@keyframes sd-success-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes sd-success-ring { from { transform: scale(.6); opacity: 1; } to { transform: scale(2.4); opacity: 0; } }
+@keyframes sd-success-fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .sd-success, .sd-success__check { animation: none; }
+  .sd-reveal--rise > :first-child > * { animation: none; }
+  .sd-success__ring { display: none; }
   .sd-attempt[data-correct='true'], .sd-race .sd-letters .just-completed { animation: none; }
   .sd-hold-progress span { transition: none; }
 }

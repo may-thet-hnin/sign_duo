@@ -30,6 +30,9 @@ export const COMPETITION_POOLS = Object.freeze({
 export const POINTS_PER_SIGN = 1;
 // Skips each player gets per race (duo players have their own allowance).
 export const SKIPS_PER_RACE = 3;
+// After a correct sign: success animation, with recognition paused this long
+// so a held gesture is not read again before the player switches signs.
+export const SUCCESS_PAUSE_MS = 1200;
 export const RECOGNITION_CONFIG = Object.freeze({
   confidence: 0.85, margin: 0.15, windowSize: 12, minimumSamples: 8,
   agreement: 0.8, durationMs: 900, maxGapMs: 350, releaseMs: 400,

@@ -11,7 +11,7 @@ Inspired by the fast-paced feel of typing races, SignDuo combines guided practic
 <!-- Add a screenshot or GIF of your finished app here -->
 <!-- ![SignDuo demo](docs/images/demo.gif) -->
 
-**[Live Demo](YOUR_DEPLOYED_URL)** · **[Demo Video](YOUR_DEMO_VIDEO_URL)**
+
 
 </div>
 

@@ -12,28 +12,82 @@ function thumbIndexAngle(points) {
 
 // Experimental static handshape heuristics for A, B and L.
 // Confirm results against an ASL reference and calibrate with multiple people.
+
 export function recognizeLetter(landmarks) {
-  if (!Array.isArray(landmarks) || landmarks.length !== 21 ||
-      landmarks.some(p => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
+  if (
+    !Array.isArray(landmarks) ||
+    landmarks.length !== 21 ||
+    landmarks.some(
+      (p) =>
+        !p ||
+        !Number.isFinite(p.x) ||
+        !Number.isFinite(p.y)
+    )
+  ) {
+    return null;
+  }
 
   const index = isFingerExtended(landmarks, 'index');
   const middle = isFingerExtended(landmarks, 'middle');
   const ring = isFingerExtended(landmarks, 'ring');
   const pinky = isFingerExtended(landmarks, 'pinky');
   const thumb = isFingerExtended(landmarks, 'thumb');
-  const palmWidth = getDistance(landmarks[5], landmarks[17]);
-  if (!Number.isFinite(palmWidth) || palmWidth < 0.001) return null;
 
-  // For B, the thumb typically folds across the palm and four fingers extend.
-  const thumbAcrossPalm = getDistance(landmarks[4], landmarks[5]) < palmWidth * 0.85;
-  if (index && middle && ring && pinky && thumbAcrossPalm) return 'B';
-  // The thumb-index opening is less dependent on whether the hand is tilted
-  // sideways than the original thumb-extension threshold alone.
+  const palmWidth = getDistance(landmarks[5], landmarks[17]);
+
+  if (!Number.isFinite(palmWidth) || palmWidth < 0.001) {
+    return null;
+  }
+
+  const thumbToIndexBase =
+    getDistance(landmarks[4], landmarks[5]) / palmWidth;
+
   const opening = thumbIndexAngle(landmarks);
-  const thumbTipFarFromIndexBase = getDistance(landmarks[4], landmarks[5]) > palmWidth * 0.95;
-  if (index && !middle && !ring && !pinky &&
-      !thumbAcrossPalm && thumbTipFarFromIndexBase &&
-      opening >= 40 && opening <= 145) return 'L';
-  if (!index && !middle && !ring && !pinky && thumb && !thumbAcrossPalm) return 'A';
-  return null;
+
+  // Score each handshape instead of requiring every condition to pass.
+  let scoreA = 0;
+  let scoreB = 0;
+  let scoreL = 0;
+
+  // A: four fingers folded, thumb visible and away from the palm.
+  scoreA += !index ? 1 : 0;
+  scoreA += !middle ? 1 : 0;
+  scoreA += !ring ? 1 : 0;
+  scoreA += !pinky ? 1 : 0;
+  scoreA += thumb ? 1 : 0;
+  scoreA += thumbToIndexBase > 0.70 ? 1 : 0;
+
+  // B: four fingers extended, thumb relatively close to index base.
+  scoreB += index ? 1 : 0;
+  scoreB += middle ? 1 : 0;
+  scoreB += ring ? 1 : 0;
+  scoreB += pinky ? 1 : 0;
+  scoreB += thumbToIndexBase < 1.05 ? 1 : 0;
+
+  // L: index extended, other fingers folded, thumb open.
+  scoreL += index ? 1 : 0;
+  scoreL += !middle ? 1 : 0;
+  scoreL += !ring ? 1 : 0;
+  scoreL += !pinky ? 1 : 0;
+  scoreL += thumbToIndexBase > 0.70 ? 1 : 0;
+  scoreL += opening >= 25 && opening <= 155 ? 1 : 0;
+
+  const candidates = [
+    { letter: 'A', score: scoreA, minimum: 5 },
+    { letter: 'B', score: scoreB, minimum: 4 },
+    { letter: 'L', score: scoreL, minimum: 5 },
+  ];
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  const best = candidates[0];
+  const second = candidates[1];
+
+  // Require a reasonable match and a margin over the next-best letter.
+  if (best.score < best.minimum || best.score - second.score < 1) {
+    return null;
+  }
+
+  return best.letter;
 }
+

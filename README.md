@@ -37,3 +37,4 @@ and `npm run build` for automated checks.
 
 See [Learning Mode implementation and testing report](docs/learning-mode.md) for
 recognition limitations, file changes, validation results, and the manual test checklist.
+

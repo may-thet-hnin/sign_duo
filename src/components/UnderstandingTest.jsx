@@ -119,7 +119,7 @@ export default function UnderstandingTest({ lesson, onFinish, onExit }) {
     <article className="learn-panel learn-camera glass">
       <div className="learn-camera__heading"><h3>Your turn</h3><span className="learn-pill">Sign {test.index + 1} / {TEST_LENGTH}</span></div>
       <div className="sd-success-host">
-        <Camera challengeId={challengeId} targetSign={target} recognitionActive={!test.done && !celebration}
+        <Camera challengeId={challengeId} targetSign={target} recognitionActive={!test.done && !celebration} trackingPaused={Boolean(celebration)}
           ghost={showGhost && !celebration ? target : null} onRecognition={handleRecognition} />
         {celebration && <SuccessBurst key={celebration.id} sign={celebration.sign} next={celebration.next} />}
       </div>

@@ -57,7 +57,11 @@ function toFrame(result) {
  * @param {{ enabled?: boolean, onFrame?: (frame: { landmarks: {x:number,y:number,z:number}[] | null, handedness: 'Left' | 'Right' | null, world: {x:number,y:number,z:number}[] | null }) => void }} options
  */
 export default function useHandTracking(videoRef, options = {}) {
-  const { enabled = true, onFrame } = options
+  // `paused` skips detection (each call blocks the main thread for tens of ms)
+  // while keeping the loop and landmarker ready, e.g. during a success animation.
+  const { enabled = true, onFrame, paused = false } = options
+  const pausedRef = useRef(paused)
+  useEffect(() => { pausedRef.current = paused }, [paused])
 
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState(null)
@@ -85,6 +89,7 @@ export default function useHandTracking(videoRef, options = {}) {
       if (
         video &&
         landmarker &&
+        !pausedRef.current &&
         video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
         video.currentTime !== lastVideoTime
       ) {

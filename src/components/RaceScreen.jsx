@@ -34,7 +34,7 @@ function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, re
       </div>
       <div className="sd-race-camera">
         {!player.finished && ['waiting', 'running'].includes(status) && <Camera deviceId={cameraId || undefined}
-          challengeId={player.challengeId} targetSign={player.currentTarget} recognitionActive={status === 'running' && !celebration}
+          challengeId={player.challengeId} targetSign={player.currentTarget} recognitionActive={status === 'running' && !celebration} trackingPaused={Boolean(celebration)}
           allowlist={SUPPORTED_SIGNS.competition}
           onRecognition={next => onRecognition(player.id, next)} onStatus={cameraStatus} />}
         {celebration && <SuccessBurst key={celebration.id} sign={celebration.sign} next={celebration.next} />}

@@ -19,12 +19,12 @@ function displayKey(result) {
  *
  * @param {string | undefined} deviceId  Optional camera id for two-player mode
  */
-export default function Camera({ deviceId, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true, allowlist = SUPPORTED_SIGNS.learning, ghost = null }) {
+export default function Camera({ deviceId, onStatus, onRecognition, challengeId = null, targetSign = null, recognitionActive = true, allowlist = SUPPORTED_SIGNS.learning, ghost = null, trackingPaused = false }) {
   // A device change gets fresh state and fully tears down the previous session.
-  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} allowlist={allowlist} ghost={ghost} />
+  return <CameraSession key={deviceId || 'default'} deviceId={deviceId} onStatus={onStatus} onRecognition={onRecognition} challengeId={challengeId} targetSign={targetSign} recognitionActive={recognitionActive} allowlist={allowlist} ghost={ghost} trackingPaused={trackingPaused} />
 }
 
-function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetSign, recognitionActive, allowlist, ghost }) {
+function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetSign, recognitionActive, allowlist, ghost, trackingPaused }) {
   const videoRef = useRef(null)
   const drawRef = useRef(null)
   const [cameraReady, setCameraReady] = useState(false)
@@ -168,6 +168,7 @@ function CameraSession({ deviceId, onStatus, onRecognition, challengeId, targetS
   const { isReady: modelReady, error: modelError } = useHandTracking(videoRef, {
     enabled: cameraReady,
     onFrame: handleFrame,
+    paused: trackingPaused,
   })
 
   const error = cameraError || modelError || recognitionError

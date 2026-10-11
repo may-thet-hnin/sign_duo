@@ -95,6 +95,11 @@ button { cursor: pointer; }
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(19, 11, 58, 0.14) 2px 3px);
 }
 
+/* While a camera is on screen, hold the backdrop still: every moving cloud or
+   blob forces all blurred glass panels to re-render, competing with hand tracking. */
+body:has(.sd-camera) .sd-scenery *,
+body:has(.sd-camera) .sd-scenery { animation-play-state: paused !important; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

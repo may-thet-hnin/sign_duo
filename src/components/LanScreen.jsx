@@ -44,7 +44,6 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
   const [view, setView] = useState('menu');
   const [name, setName] = useState(readName);
   const [codeInput, setCodeInput] = useState('');
-  const [address, setAddress] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -139,8 +138,8 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
     event.preventDefault();
     const code = normalizeInviteCode(codeInput);
     if (!code) { setError('Enter the 6-character invite code.'); return; }
-    setError(''); setNotice(''); setBusy(address.trim() ? 'Connecting to the host…' : 'Searching the network for the lobby…');
-    try { await client().join(code, rememberName(), address); }
+    setError(''); setNotice(''); setBusy('Connecting to the lobby…');
+    try { await client().join(code, rememberName()); }
     catch (err) { clientRef.current = null; setBusy(''); setError(errorText(err.message)); }
   }
 
@@ -182,7 +181,7 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
     return <section className="sd-setup lan">
       <button className="sd-link" onClick={onExit}>Back to menu</button>
       <h1 className="sd-page-title">LAN multiplayer</h1>
-      <p className="sd-hint">Two devices on the same Wi-Fi, each with its own camera. Both devices run the app and the LAN helper (<code>npm run dev:lan</code>).</p>
+      <p className="sd-hint">Two devices on the same Wi-Fi, each with its own camera. Signs are recognized on each device; only game moves are sent between the two, directly over the local network.</p>
       {notice && <p className="sd-error" role="alert">{notice}</p>}
       <div className="sd-setup-box glass lan-panel">
         <label className="lan-field">Your name
@@ -197,12 +196,6 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
             <input className="lan-code-input" value={codeInput} maxLength={7} autoFocus autoComplete="off" spellCheck={false}
               placeholder="X7K9P2" onChange={e => setCodeInput(e.target.value.toUpperCase())} disabled={Boolean(busy)} />
           </label>
-          <details className="lan-advanced">
-            <summary>Can't find the lobby?</summary>
-            <label className="lan-field">Host address (shown in the host's lobby)
-              <input value={address} placeholder="192.168.1.20" onChange={e => setAddress(e.target.value)} disabled={Boolean(busy)} />
-            </label>
-          </details>
           <div className="lan-actions">
             <button className="sd-button sd-button-start" type="submit" disabled={Boolean(busy)}>Join</button>
             <button className="sd-button sd-button-secondary" type="button" onClick={() => { setView('menu'); setError(''); }} disabled={Boolean(busy)}>Back</button>
@@ -231,7 +224,7 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
           <strong className="lan-code" aria-label={`Lobby code ${state.code.split('').join(' ')}`}>{state.code}</strong>
           <button className="sd-button sd-button-secondary sd-small" onClick={copyCode}>{copied ? 'Copied!' : 'Copy'}</button>
         </div>
-        {isHost && <p className="sd-hint">Share this code with Player 2. If their device can't find the lobby, they can enter this address: <b>{state.lanAddresses.join(' or ') || 'not on a network'}</b></p>}
+        {isHost && <p className="sd-hint">Share this code with Player 2. Keep this page open: your device hosts the match.</p>}
         <ul className="lan-players">
           {[0, 1].map(slot => {
             const player = state.players[slot];

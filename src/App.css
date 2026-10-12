@@ -422,8 +422,6 @@
 .lan-code-input { font-family: var(--display) !important; letter-spacing: .35em; text-transform: uppercase; }
 .lan-actions { display: flex; flex-wrap: wrap; gap: 14px; }
 .lan-actions > .sd-button { flex: 1 1 160px; }
-.lan-advanced summary { cursor: pointer; color: var(--text-soft); font-size: 15px; }
-.lan-advanced .lan-field { margin-top: 10px; }
 .lan-busy { display: flex; align-items: center; gap: 12px; color: var(--aqua); }
 .lan-spinner { width: 16px; height: 16px; flex: none; background: var(--aqua); box-shadow: 0 0 0 2px var(--ink); animation: sd-spin 1s steps(4) infinite; }
 .lan-label { margin: 0; color: var(--text-soft); }

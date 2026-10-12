@@ -109,21 +109,13 @@ npm run build
 
 ## 📡 LAN Multiplayer
 
-Two players on **two devices on the same Wi-Fi**, each with their own camera. Only gameplay messages cross the network; video never leaves a device.
+Two players on **two devices on the same Wi-Fi**, each with their own camera. It works on the deployed site; nothing to install.
 
-On **both** devices, clone the project, run `npm install`, then:
-
-```bash
-npm run dev:lan
-```
-
-This starts the app and the small **LAN helper** (`server/lan-relay.mjs`). Open `http://localhost:5173` on each device (a page opened over the network from another machine would not be allowed to use the camera). If Windows or macOS asks, allow Node.js on **private** networks.
-
-1. **Player 1:** Play a race → **LAN** → Open LAN lobby → **Create lobby**. Share the 6-character code.
-2. **Player 2:** Play a race → **LAN** → **Join lobby** → enter the code. The helper finds the host by UDP broadcast. If the network blocks that (guest Wi-Fi often does), open *Can't find the lobby?* and enter the host address shown in the host's lobby.
+1. **Player 1:** Play a race → **LAN** → Open LAN lobby → **Create lobby**, and share the 6-character code. Keep this page open: the host's browser runs the match.
+2. **Player 2:** Play a race → **LAN** → **Join lobby** → enter the code.
 3. Both press **Ready**; the host picks the signs and length and presses **Start match**. Once both cameras are ready, a synced 3-2-1 countdown starts the match on both screens.
 
-The host's helper runs the match with the same race engine as Duo (same random sequence for both players, scoring, skips, duplicate protection). If a player disconnects, the match pauses for up to 30 seconds and resumes when they reconnect (automatically, or with **Rejoin my lobby** after a reload); otherwise the remaining player wins. If the host leaves, the match closes for both. Details: [docs/lan-multiplayer.md](docs/lan-multiplayer.md).
+The devices connect directly with **WebRTC**. Only the initial handshake (finding the host by invite code) goes through the free public [PeerJS](https://peerjs.com/) signaling server; signs are recognized on each device and only game moves travel between them, never video. The host's page runs the match with the same race engine as Duo (same random sequence, scoring, skips, duplicate protection). If the guest disconnects, the match pauses for up to 30 seconds and resumes when they reconnect (automatically, or with **Rejoin my lobby** after a reload); otherwise the host wins. If the host closes the page, the match ends for both. Details: [docs/lan-multiplayer.md](docs/lan-multiplayer.md).
 
 ## 🎮 Competition Rules
 

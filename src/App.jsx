@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import LearnScreen from './components/LearnScreen.jsx';
-import LanScreen from './components/LanScreen.jsx';
+// LAN mode (and its WebRTC library) loads only when someone opens it.
+const LanScreen = lazy(() => import('./components/LanScreen.jsx'));
 import RaceScreen from './components/RaceScreen.jsx';
 import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
@@ -251,7 +252,9 @@ export default function App() {
         <button className="sd-button sd-button-start sd-start" onClick={startRace}>{mode === 'lan' ? 'Open LAN lobby' : `Start ${mode === 'versus' ? 'duo' : 'solo'} race`}</button>
       </section>}
 
-      {screen === 'lan' && <LanScreen initialSettings={{ durationSeconds: duration, vocabulary }} cameraId={cameraIds.p1 || undefined} onExit={goHome} />}
+      {screen === 'lan' && <Suspense fallback={<p className="lan-busy" role="status"><span className="lan-spinner" aria-hidden="true" />Loading LAN mode…</p>}>
+        <LanScreen initialSettings={{ durationSeconds: duration, vocabulary }} cameraId={cameraIds.p1 || undefined} onExit={goHome} />
+      </Suspense>}
 
       {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} celebrations={celebrations} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onSkip={skipTarget} onExit={goHome} />}
 

@@ -52,6 +52,7 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
   const [connection, setConnection] = useState('idle');
   const [recognition, setRecognition] = useState(null);
   const [celebration, setCelebration] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const [copied, setCopied] = useState(false);
   const [canResume, setCanResume] = useState(hasSavedSession);
@@ -99,6 +100,7 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
         },
         onError: code => { setBusy(''); setError(errorText(code)); },
         onStatus: setConnection,
+        onRemoteStream: setRemoteStream,
         onClosed: reason => {
           clientRef.current = null; sessionRef.current = null; stateRef.current = null;
           setSession(null); setState(null); setRecognition(null); setCelebration(null); setBusy('');
@@ -181,7 +183,7 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
     return <section className="sd-setup lan">
       <button className="sd-link" onClick={onExit}>Back to menu</button>
       <h1 className="sd-page-title">LAN multiplayer</h1>
-      <p className="sd-hint">Two devices on the same Wi-Fi, each with its own camera. Signs are recognized on each device; only game moves are sent between the two, directly over the local network.</p>
+      <p className="sd-hint">Two devices on the same Wi-Fi, each with its own camera. Signs are recognized on each device. Game moves and each player’s camera video are sent directly between the two over the local network.</p>
       {notice && <p className="sd-error" role="alert">{notice}</p>}
       <div className="sd-setup-box glass lan-panel">
         <label className="lan-field">Your name
@@ -313,10 +315,12 @@ export default function LanScreen({ initialSettings, cameraId, onExit }) {
       <RacePlayer player={myPanel} index={myPanel.id === 'p1' ? 0 : 1} status={status} timeLeft={remaining / duration}
         cameraId={cameraId} recognition={recognition} event={waitingText} celebration={celebration}
         onRecognition={handleRecognition} onCameraStatus={handleCameraStatus}
+        onStream={stream => clientRef.current?.setLocalStream(stream)}
         onSimulate={(id, letter) => send({ type: 'sign', letter, eventId: `${PAGE_NONCE}:sim:${now}`, challengeId: me?.challengeId ?? '' })}
         onSkip={(id, challengeId) => send({ type: 'skip', challengeId })} />
       {opponent && <RacePlayer remote player={opponent} index={opponent.id === 'p1' ? 0 : 1} status={status} timeLeft={remaining / duration}
-        remoteNote={lobbyOpponent?.connected === false ? 'Opponent disconnected.' : 'Signing on their own device'} />}
+        remoteStream={lobbyOpponent?.connected === false ? null : remoteStream}
+        remoteNote={lobbyOpponent?.connected === false ? 'Opponent disconnected.' : remoteStream ? 'Signing on their own device' : 'Waiting for their camera…'} />}
     </div>
     {countdown && <div className="lan-countdown" role="status" aria-live="assertive"><span key={countdown}>{countdown}</span></div>}
     {phase === 'paused' && <div className="lan-pause" role="alert">

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Camera from './Camera.jsx';
 import PixelSprite from './Pixel.jsx';
 import RecognitionDebug from './RecognitionDebug.jsx';
@@ -15,12 +15,31 @@ function attemptText(player, event) {
   return event ?? (attempt.correct ? `${attempt.target}: correct!` : `Signed ${attempt.letter} for ${attempt.target}`);
 }
 
+/** The LAN opponent's camera, mirrored like the local preview. */
+function RemoteVideo({ stream, label }) {
+  const videoRef = useRef(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return undefined;
+    video.srcObject = stream;
+    video.play().catch(() => {}); // autoplay of a muted stream may still be refused; the browser retries on interaction
+    return () => { video.srcObject = null; };
+  }, [stream]);
+  return <div className="sd-camera">
+    <div className="sd-camera__frame">
+      <video ref={videoRef} className="sd-camera__video" playsInline muted autoPlay aria-label={`${label}'s camera`} />
+      <span className="sd-camera__live">Live</span>
+    </div>
+  </div>;
+}
+
 /**
  * One player's race panel. Also used by LAN mode: the local player gets the
- * camera; the opponent (`remote`) is shown from synced state, without a
+ * camera; the opponent (`remote`) is shown from synced state, with their
+ * camera video when it has arrived (`remoteStream`), and without a
  * camera, skip button or diagnostics.
  */
-export function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, recognition, event, celebration, onRecognition, onCameraStatus, onSimulate, onSkip, remote = false, remoteNote = '' }) {
+export function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, recognition, event, celebration, onRecognition, onCameraStatus, onStream, onSimulate, onSkip, remote = false, remoteNote = '', remoteStream = null }) {
   const cameraStatus = useCallback(next => onCameraStatus(player.id, next), [onCameraStatus, player.id]);
   const detected = recognition?.candidate || recognition?.letter;
   const progress = recognitionProgress(recognition, player.currentTarget, player.challengeId).progress;
@@ -38,11 +57,11 @@ export function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLa
         {sign?.movement && <p className="sd-word-guidance">{sign.movement}{sign.simplified ? ' Simplified: forehead position is not checked.' : ''}</p>}
       </div>
       <div className="sd-race-camera">
-        {remote && <div className="sd-player-remote">{remoteNote}</div>}
+        {remote && (remoteStream ? <RemoteVideo stream={remoteStream} label={player.name} /> : <div className="sd-player-remote">{remoteNote}</div>)}
         {!remote && !player.finished && ['waiting', 'running'].includes(status) && <Camera deviceId={cameraId || undefined}
           challengeId={player.challengeId} targetSign={player.currentTarget} recognitionActive={status === 'running' && !celebration} trackingPaused={Boolean(celebration)}
           allowlist={SUPPORTED_SIGNS.competition}
-          onRecognition={next => onRecognition(player.id, next)} onStatus={cameraStatus} />}
+          onRecognition={next => onRecognition(player.id, next)} onStatus={cameraStatus} onStream={onStream} />}
         {celebration && <SuccessBurst key={celebration.id} sign={celebration.sign} next={celebration.next} />}
         {player.finished && <div className="sd-player-finished">Out of hearts</div>}
         {!remote && <p className="sd-caption">{deviceLabel || 'Default camera'}</p>}

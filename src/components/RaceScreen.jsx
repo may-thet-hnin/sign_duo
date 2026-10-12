@@ -12,10 +12,15 @@ function attemptText(player, event) {
   const attempt = player.lastAttempt;
   if (!attempt) return 'Hold a matching sign steadily to advance.';
   if (attempt.skipped) return `Skipped ${attempt.target} · no points. Next: ${player.currentTarget ?? '—'}`;
-  return event;
+  return event ?? (attempt.correct ? `${attempt.target}: correct!` : `Signed ${attempt.letter} for ${attempt.target}`);
 }
 
-function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, recognition, event, celebration, onRecognition, onCameraStatus, onSimulate, onSkip }) {
+/**
+ * One player's race panel. Also used by LAN mode: the local player gets the
+ * camera; the opponent (`remote`) is shown from synced state, without a
+ * camera, skip button or diagnostics.
+ */
+export function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, recognition, event, celebration, onRecognition, onCameraStatus, onSimulate, onSkip, remote = false, remoteNote = '' }) {
   const cameraStatus = useCallback(next => onCameraStatus(player.id, next), [onCameraStatus, player.id]);
   const detected = recognition?.candidate || recognition?.letter;
   const progress = recognitionProgress(recognition, player.currentTarget, player.challengeId).progress;
@@ -33,18 +38,19 @@ function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, re
         {sign?.movement && <p className="sd-word-guidance">{sign.movement}{sign.simplified ? ' Simplified: forehead position is not checked.' : ''}</p>}
       </div>
       <div className="sd-race-camera">
-        {!player.finished && ['waiting', 'running'].includes(status) && <Camera deviceId={cameraId || undefined}
+        {remote && <div className="sd-player-remote">{remoteNote}</div>}
+        {!remote && !player.finished && ['waiting', 'running'].includes(status) && <Camera deviceId={cameraId || undefined}
           challengeId={player.challengeId} targetSign={player.currentTarget} recognitionActive={status === 'running' && !celebration} trackingPaused={Boolean(celebration)}
           allowlist={SUPPORTED_SIGNS.competition}
           onRecognition={next => onRecognition(player.id, next)} onStatus={cameraStatus} />}
         {celebration && <SuccessBurst key={celebration.id} sign={celebration.sign} next={celebration.next} />}
         {player.finished && <div className="sd-player-finished">Out of hearts</div>}
-        <p className="sd-caption">{deviceLabel || 'Default camera'}</p>
+        {!remote && <p className="sd-caption">{deviceLabel || 'Default camera'}</p>}
       </div>
     </div>
-    <p className="sd-feedback" role="status">{status === 'waiting' ? recognition?.error || event || 'Preparing cameras…' : celebration ? `Correct! Get ready for ${celebration.next ?? 'the next sign'}…` : raceFeedback(player, recognition)}</p>
-    <div className="sd-hold-progress" role="progressbar" aria-label={`${player.name} ${sign?.movement ? 'motion completion' : 'sign stability'}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}><span style={{ width: `${progress * 100}%` }} /></div>
-    {status === 'running' && !player.finished && <div className="sd-skip">
+    <p className="sd-feedback" role="status">{remote ? remoteNote : status === 'waiting' ? recognition?.error || event || 'Preparing cameras…' : celebration ? `Correct! Get ready for ${celebration.next ?? 'the next sign'}…` : raceFeedback(player, recognition)}</p>
+    {!remote && <div className="sd-hold-progress" role="progressbar" aria-label={`${player.name} ${sign?.movement ? 'motion completion' : 'sign stability'}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}><span style={{ width: `${progress * 100}%` }} /></div>}
+    {!remote && status === 'running' && !player.finished && <div className="sd-skip">
       <span>Stuck on this sign?</span>
       <button type="button" className="sd-button sd-button-secondary sd-small" disabled={player.skipsLeft === 0}
         onClick={() => onSkip(player.id, player.challengeId)}
@@ -73,7 +79,7 @@ function RacePlayer({ player, index, status, timeLeft, cameraId, deviceLabel, re
       <span>Correct <b>{player.correct}</b></span><span>Skipped <b>{player.skipped}</b></span>
       <span>Mistakes <b>{player.mistakes}</b></span><span>Accuracy <b>{player.accuracy}%</b></span>
     </div>
-    {import.meta.env.DEV && <div className="sd-race-diagnostics">
+    {import.meta.env.DEV && !remote && <div className="sd-race-diagnostics">
       <RecognitionDebug result={recognition} target={player.currentTarget} />
       {status === 'running' && <details className="sd-debug"><summary>Developer tests (simulated, not camera)</summary>
         {SUPPORTED_SIGNS.competition.map(letter => <button key={letter} className="sd-button sd-button-secondary sd-small" onClick={() => onSimulate(player.id, letter)}>Simulate {letter}</button>)}

@@ -106,7 +106,7 @@
 .sd-home > .sd-hint { grid-column: 1 / -1; margin-top: -8px; }
 
 /* ── Setup ── */
-.sd-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-bottom: 30px; }
+.sd-mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px; margin-bottom: 30px; }
 .sd-mode {
   display: grid; gap: 12px; justify-items: start; text-align: left;
   padding: 24px; color: var(--text); border-radius: var(--r-md);
@@ -389,6 +389,8 @@
 .sd-race .sd-stats b { font-size: 10px; }
 .sd-race-diagnostics { font-size: 12px; }
 .sd-player-finished { display: grid; place-content: center; min-height: 180px; color: var(--mint); }
+.sd-player-remote { display: grid; place-content: center; min-height: 160px; padding: 16px; text-align: center; border-radius: 12px;
+  border: 1.5px dashed rgba(255, 255, 255, .3); background: rgba(19, 11, 58, .45); color: var(--text-soft); font-size: 16px; }
 @keyframes sd-accepted { from { filter: brightness(1.8); } to { filter: brightness(1); } }
 @media (max-width: 1100px) and (min-width: 721px) {
   .sd-race--versus .sd-player-body { grid-template-columns: minmax(0,1fr) 140px; gap: 10px; }
@@ -411,6 +413,38 @@
   .sd-race .sd-mode-tag { font-size: 9px; }
   .sd-race .sd-small { font-size: 12px; padding: 9px; }
 }
+/* LAN multiplayer: menu, lobby, scoreboard, countdown and pause. */
+.lan { max-width: 760px; margin-inline: auto; }
+.lan-panel { display: grid; gap: 18px; }
+.lan-field { display: grid; gap: 8px; font-size: 16px; color: var(--text-soft); }
+.lan-field input { font: inherit; font-size: 18px; color: #fff; padding: 12px 14px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.35); background: rgba(19,11,58,.6); }
+.lan-field input:focus-visible { outline: 3px solid var(--aqua); outline-offset: 2px; }
+.lan-code-input { font-family: var(--display) !important; letter-spacing: .35em; text-transform: uppercase; }
+.lan-actions { display: flex; flex-wrap: wrap; gap: 14px; }
+.lan-actions > .sd-button { flex: 1 1 160px; }
+.lan-advanced summary { cursor: pointer; color: var(--text-soft); font-size: 15px; }
+.lan-advanced .lan-field { margin-top: 10px; }
+.lan-busy { display: flex; align-items: center; gap: 12px; color: var(--aqua); }
+.lan-spinner { width: 16px; height: 16px; flex: none; background: var(--aqua); box-shadow: 0 0 0 2px var(--ink); animation: sd-spin 1s steps(4) infinite; }
+.lan-label { margin: 0; color: var(--text-soft); }
+.lan-code-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.lan-code { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 7vw, 48px); letter-spacing: .18em; color: var(--gold); text-shadow: 4px 4px 0 var(--ink); }
+.lan-players { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lan-player { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(19,11,58,.5); border: 1.5px solid rgba(255,255,255,.2); }
+.lan-player--empty { color: var(--text-soft); border-style: dashed; }
+.lan-player__name { flex: 1 1 140px; font-size: 17px; }
+.lan-pill { font-size: 13px; padding: 5px 10px; border-radius: 999px; color: var(--text-soft); border: 1px solid rgba(255,255,255,.3); }
+.lan-pill.ok { color: var(--ink); background: var(--mint); border-color: var(--ink); }
+.lan-status { margin: 0; }
+.lan-banner { position: sticky; top: 10px; z-index: 40; text-align: center; }
+.lan-scoreboard { display: flex; justify-content: center; align-items: baseline; gap: 18px; padding: 12px 16px; margin: 0 0 14px; border-radius: var(--r-md); font-size: 17px; }
+.lan-scoreboard b { font-family: var(--display); font-weight: 400; color: var(--player, var(--gold)); margin-left: 6px; }
+.lan-scoreboard__vs { color: var(--text-soft); font-size: 14px; }
+.lan-countdown, .lan-pause { position: fixed; inset: 0; z-index: 55; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; background: rgba(19,11,58,.62); }
+.lan-countdown span { font-family: var(--display); font-size: clamp(80px, 20vw, 160px); color: var(--gold); text-shadow: 6px 6px 0 var(--ink); animation: sd-clear-in .35s steps(4) both; }
+.lan-pause strong { font-family: var(--display); font-weight: 400; font-size: clamp(16px, 3vw, 26px); color: #ffb3c0; }
+.lan-pause span { max-width: 420px; color: #fff; }
+
 /* Results reveal: arcade "stage clear" banner, then the results rise in. */
 .sd-clear {
   position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 14px;

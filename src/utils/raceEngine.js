@@ -18,7 +18,7 @@
  * No React, webcam, model, or backend dependencies.
  */
 
-import { COMPETITION_POOLS, POINTS_PER_SIGN, SKIPS_PER_RACE, SUPPORTED_SIGNS } from '../recognition/config.js';
+import { COMPETITION_POOLS, SKIPS_PER_RACE, SUPPORTED_SIGNS } from '../recognition/config.js';
 let nextRaceId = 0;
 
 export class RaceEngine {

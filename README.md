@@ -107,6 +107,24 @@ npm run lint
 npm run build
 ```
 
+## 📡 LAN Multiplayer
+
+Two players on **two devices on the same Wi-Fi**, each with their own camera. Only gameplay messages cross the network; video never leaves a device.
+
+On **both** devices, clone the project, run `npm install`, then:
+
+```bash
+npm run dev:lan
+```
+
+This starts the app and the small **LAN helper** (`server/lan-relay.mjs`). Open `http://localhost:5173` on each device (a page opened over the network from another machine would not be allowed to use the camera). If Windows or macOS asks, allow Node.js on **private** networks.
+
+1. **Player 1:** Play a race → **LAN** → Open LAN lobby → **Create lobby**. Share the 6-character code.
+2. **Player 2:** Play a race → **LAN** → **Join lobby** → enter the code. The helper finds the host by UDP broadcast. If the network blocks that (guest Wi-Fi often does), open *Can't find the lobby?* and enter the host address shown in the host's lobby.
+3. Both press **Ready**; the host picks the signs and length and presses **Start match**. Once both cameras are ready, a synced 3-2-1 countdown starts the match on both screens.
+
+The host's helper runs the match with the same race engine as Duo (same random sequence for both players, scoring, skips, duplicate protection). If a player disconnects, the match pauses for up to 30 seconds and resumes when they reconnect (automatically, or with **Rejoin my lobby** after a reload); otherwise the remaining player wins. If the host leaves, the match closes for both. Details: [docs/lan-multiplayer.md](docs/lan-multiplayer.md).
+
 ## 🎮 Competition Rules
 
 | Rule | Details |
@@ -114,11 +132,11 @@ npm run build
 | Round length | 30, 60, 90, or 120 seconds (default 60) |
 | Prompt categories | Alphabet, Basic Words, Mixed |
 | Sequence | Randomized for each race; continues until time expires |
-| Fairness | Duo players receive the same sequence |
+| Fairness | Duo and LAN players receive the same sequence |
 | Scoring | +1 per correct sign |
 | Skips | Up to 3 per player; no points, no time pause |
 | Solo | 5 hearts; the run ends when they are depleted |
-| Duo winner | Higher score, then fewer mistakes; otherwise tie |
+| Duo / LAN winner | Higher score, then fewer mistakes; otherwise tie (LAN: a player who leaves forfeits) |
 
 **Current race limitation:** **E, M, and N are excluded from competition**, even though they appear in supported lessons. Prompts avoid repeating the same recent targets.
 

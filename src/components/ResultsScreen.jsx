@@ -30,9 +30,11 @@ function pickWinner(a, b, winnerId) {
 const WIN_REASONS = {
   more_points: "Highest score when time ran out",
   fewer_mistakes: "Same correct signs, fewer mistakes",
+  opponent_left: "Opponent left the match",
 };
 
-export default function ResultsScreen({ players, winnerId, winReason, onRematch, onHome, durationSeconds }) {
+export default function ResultsScreen({ players, winnerId, winReason, onRematch, onHome, durationSeconds,
+  rematchLabel = "Play again", homeLabel = "Back to menu", extraActions = null }) {
   const [a, b] = players;
   const winner = pickWinner(a, b, winnerId);
   const loser = winner ? (winner.id === a.id ? b : a) : null;
@@ -106,9 +108,10 @@ export default function ResultsScreen({ players, winnerId, winReason, onRematch,
       </div>
 
       <div className="rs__actions">
-        <button className="sd-button sd-button-start" onClick={onRematch}>Play again</button>
+        <button className="sd-button sd-button-start" onClick={onRematch}>{rematchLabel}</button>
+        {extraActions}
         {onHome && (
-          <button className="sd-button sd-button-secondary" onClick={onHome}>Back to menu</button>
+          <button className="sd-button sd-button-secondary" onClick={onHome}>{homeLabel}</button>
         )}
       </div>
     </div>

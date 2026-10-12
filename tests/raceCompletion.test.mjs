@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RaceEngine } from '../src/utils/raceEngine.js';
-import { COMPETITION_POOLS, POINTS_PER_SIGN } from '../src/recognition/config.js';
+import { COMPETITION_POOLS } from '../src/recognition/config.js';
 
 function race(mode = 'versus', options = {}) {
   let now = 0;
@@ -101,14 +101,16 @@ test('each correct sign scores points; the highest score at zero wins', () => {
   signCorrectly(engine, 'p1', 'p1-0');
   // p2 also makes more mistakes, but points decide first.
   recognize(engine, 'p2', wrongSign(engine, 'p2'), 'p2-wrong');
-  assert.equal(engine.getSnapshot().players.find(p => p.id === 'p2').score, 3 * POINTS_PER_SIGN);
+  // Score is net correct signs per minute: 3 correct in the first second.
+  assert.equal(engine.getSnapshot().players.find(p => p.id === 'p2').score, 180);
   assert.equal(engine.status, 'running', 'no player can end a duo early');
   at(30000); engine.updateTime();
   const result = engine.getResults();
   assert.equal(result.winnerId, 'p2');
   assert.equal(result.winReason, 'more_points');
   assert.deepEqual(result.ranking.map(p => p.id), ['p2', 'p1']);
-  assert.deepEqual(result.ranking.map(p => p.score), [3 * POINTS_PER_SIGN, POINTS_PER_SIGN]);
+  assert.deepEqual(result.ranking.map(p => p.correct), [3, 1]);
+  assert.deepEqual(result.ranking.map(p => p.score), [6, 2], 'correct signs per minute over the 30 s race');
 });
 
 test('equal scores fall back to fewer mistakes; equal on both is a genuine tie', () => {
@@ -220,7 +222,8 @@ test('skip: 0 points, no penalty, next sign at once, and a double click skips on
   assert.equal(engine.skip('p1', challengeId).reason, 'stale_challenge', 'second click of a double click');
   const after = engine.getSnapshot().players[0];
   assert.equal(after.progress, 2);
-  assert.equal(after.score, before.score, 'skipping neither adds nor removes points');
+  assert.equal(after.correct, before.correct, 'skipping neither adds nor removes points');
+  assert.equal(engine.getCompetitionScore(engine.getPlayer('p1'), 1000), 60, 'score at the same moment is unchanged by the skip');
   assert.equal(after.skipped, 1);
   assert.equal(after.hearts, before.hearts);
   assert.equal(after.mistakes, 0);
@@ -228,7 +231,7 @@ test('skip: 0 points, no penalty, next sign at once, and a double click skips on
   assert.deepEqual(after.skippedIndices, [1]);
   // A recognition finished for the skipped sign can no longer score.
   assert.equal(engine.submitRecognition('p1', { status: 'stable', isNew: true, eventId: 'late', letter: target, challengeId }).reason, 'stale_challenge');
-  assert.equal(engine.getSnapshot().players[0].score, POINTS_PER_SIGN);
+  assert.equal(engine.getPlayer('p1').correct, 1);
 });
 
 test('three skips per player per race; the fourth is refused', () => {

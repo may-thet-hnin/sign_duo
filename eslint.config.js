@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // The LAN helper runs in Node.
+    files: ['server/**/*.{js,mjs}'],
+    languageOptions: { globals: globals.node },
+  },
 ])

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import LearnScreen from './components/LearnScreen.jsx';
+import LanScreen from './components/LanScreen.jsx';
 import RaceScreen from './components/RaceScreen.jsx';
 import PixelSprite from './components/Pixel.jsx';
 import Scenery from './components/Scenery.jsx';
@@ -76,6 +77,8 @@ export default function App() {
   }
 
   function startRace() {
+    // LAN mode has its own lobby; the chosen signs and length become the host's starting settings.
+    if (mode === 'lan') { setError(''); setScreen('lan'); return; }
     try {
       if (mode === 'versus' && (!cameraIds.p1 || !cameraIds.p2 || cameraIds.p1 === cameraIds.p2)) {
         throw new Error('Duo Mode requires two different cameras. Find cameras and choose one for each player.');
@@ -170,7 +173,7 @@ export default function App() {
   return <>
     <Scenery />
     <div className="sd-scan" aria-hidden="true" />
-    <main className={`sd-app ${screen === 'race' ? 'sd-app--race' : ''}`}>
+    <main className={`sd-app ${screen === 'race' || screen === 'lan' ? 'sd-app--race' : ''}`}>
       <nav className="sd-nav glass">
         <button className="sd-brand" onClick={goHome}><PixelSprite name="A" scale={2} />Sign Duo</button>
         <span className="sd-nav-note">Learn, practice, compete</span>
@@ -216,6 +219,11 @@ export default function App() {
             <strong>Duo</strong>
             <span>Two webcams · head-to-head · Shared timer</span>
           </button>
+          <button className={`sd-mode glass ${mode === 'lan' ? 'selected' : ''}`} aria-pressed={mode === 'lan'} onClick={() => { setMode('lan'); setError(''); }}>
+            <PixelSprite name="trophy" scale={5} />
+            <strong>LAN</strong>
+            <span>Two devices · same Wi-Fi · Invite code</span>
+          </button>
         </div>
         <div className="sd-duration glass">
           <fieldset className="sd-duration-options">
@@ -240,8 +248,10 @@ export default function App() {
           {mode === 'versus' && <p className="sd-hint">Duo requires two distinct webcams connected to this computer (a phone can work as a second webcam).</p>}
         </div>
         {error && <p className="sd-error" role="alert">{error}</p>}
-        <button className="sd-button sd-button-start sd-start" onClick={startRace}>Start {mode === 'versus' ? 'duo' : 'solo'} race</button>
+        <button className="sd-button sd-button-start sd-start" onClick={startRace}>{mode === 'lan' ? 'Open LAN lobby' : `Start ${mode === 'versus' ? 'duo' : 'solo'} race`}</button>
       </section>}
+
+      {screen === 'lan' && <LanScreen initialSettings={{ durationSeconds: duration, vocabulary }} cameraId={cameraIds.p1 || undefined} onExit={goHome} />}
 
       {screen === 'race' && gameState && <RaceScreen key={gameState.raceId} gameState={gameState} mode={mode} cameraIds={cameraIds} devices={devices} recognition={recognition} events={events} celebrations={celebrations} onRecognition={handleRecognition} onCameraStatus={handleCameraStatus} onSimulate={(id, letter) => submitAttempt(id, letter, true)} onSkip={skipTarget} onExit={goHome} />}
 

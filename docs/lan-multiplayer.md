@@ -9,6 +9,7 @@ The two browsers connect to each other directly with **WebRTC** data channels:
 |---|---|
 | Finding the host | The host registers the peer id `sign-duo-lan-v1-<code>` with the free public PeerJS signaling server; the guest asks for the same id. Only this handshake uses the server. |
 | Gameplay | A reliable WebRTC data channel between the two devices. On the same Wi-Fi it stays on the local network. |
+| Camera video | Each device sends its game camera to the other as a one-way PeerJS media call, so players can see who they are racing. The host only exchanges video with the guest it has seated; other callers are refused. Video is display-only: scoring still uses each device's own recognition. |
 | Match authority | `src/lan/lanHost.js`, running in the host's page, with the same `RaceEngine` as Duo Mode. |
 
 A plain web page cannot run a server or discover LAN devices, and an `https`

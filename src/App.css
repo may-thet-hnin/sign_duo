@@ -335,7 +335,9 @@
 .sd-duration-options { min-width: 0; margin: 0; padding: 0; border: 0; }
 .sd-duration legend { max-width: 100%; margin-bottom: 16px; padding: 0; color: var(--gold); }
 .sd-duration-options > div { display: flex; flex-wrap: wrap; gap: 16px 12px; }
-.sd-duration .selected { color: var(--ink); background: var(--gold); border-color: var(--gold); }
+.sd-duration-options .selected { color: var(--ink); background: var(--gold); border-color: var(--gold); }
+/* A guest sees the host's choice (fieldset disabled), so keep the selected option bright. */
+.sd-duration-options:disabled .selected { opacity: 1; }
 
 /* Compact race layout: essential controls stay above secondary diagnostics. */
 .sd-app--race { max-width: 1320px; padding-bottom: 20px; }

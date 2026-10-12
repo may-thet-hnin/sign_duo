@@ -1,125 +1,143 @@
-import { LAN_WS_PORT, RECONNECT_GRACE_MS } from './protocol.js';
+import { Peer } from 'peerjs';
+import { createLanHost } from './lanHost.js';
+import { PEER_ID_PREFIX, CONNECT_TIMEOUT_MS, HEARTBEAT_MS, LINK_TIMEOUT_MS, RECONNECT_GRACE_MS, makeInviteCode } from './protocol.js';
 
 const SESSION_KEY = 'sign-duo-lan-session';
-const CONNECT_TIMEOUT_MS = 4000;
-const FIND_TIMEOUT_MS = 6000;
 
-function open(url) {
+/** Register with the PeerJS signaling server (as `id`, or a random id). */
+function openPeer(id) {
   return new Promise((resolve, reject) => {
-    let socket;
-    try { socket = new WebSocket(url); } catch (error) { reject(error); return; }
-    const timer = setTimeout(() => { socket.close(); reject(new Error('timeout')); }, CONNECT_TIMEOUT_MS);
-    socket.addEventListener('open', () => { clearTimeout(timer); resolve(socket); }, { once: true });
-    socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('unreachable')); }, { once: true });
+    const peer = id ? new Peer(id, { debug: 0 }) : new Peer({ debug: 0 });
+    const timer = setTimeout(() => { peer.destroy(); reject(new Error('signaling')); }, CONNECT_TIMEOUT_MS);
+    peer.once('open', () => { clearTimeout(timer); resolve(peer); });
+    peer.once('error', error => { clearTimeout(timer); peer.destroy(); reject(new Error(error.type === 'unavailable-id' ? 'taken' : 'signaling')); });
   });
 }
 
-const urlFor = (address, port = LAN_WS_PORT) => `ws://${address.includes(':') && !address.startsWith('[') ? `[${address}]` : address}:${port}`;
-
-/**
- * Ask this device's LAN helper to find which host holds `code`.
- * Resolves { address, port }; rejects with Error('no_helper' | 'not_found').
- */
-export async function findLobby(code) {
-  let socket;
-  try { socket = await open(urlFor('localhost')); } catch { throw new Error('no_helper'); }
+/** Open a WebRTC data channel to the host of `code`. */
+function connectTo(peer, code) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { socket.close(); reject(new Error('not_found')); }, FIND_TIMEOUT_MS);
-    socket.addEventListener('message', event => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'found') { clearTimeout(timer); socket.close(); resolve({ address: message.address, port: message.port }); }
-      if (message.type === 'error') { clearTimeout(timer); socket.close(); reject(new Error(message.error)); }
-    });
-    socket.send(JSON.stringify({ type: 'find', code }));
+    const connection = peer.connect(PEER_ID_PREFIX + code, { reliable: true, serialization: 'raw' });
+    const finish = (error, value) => { clearTimeout(timer); peer.off('error', onPeerError); error ? reject(error) : resolve(value); };
+    // The signaling server reports an unknown id; that means no such lobby.
+    const onPeerError = error => { connection.close(); finish(new Error(error.type === 'peer-unavailable' ? 'not_found' : 'signaling')); };
+    const timer = setTimeout(() => { connection.close(); finish(new Error('unreachable')); }, CONNECT_TIMEOUT_MS);
+    peer.on('error', onPeerError);
+    connection.once('open', () => finish(null, connection));
+    connection.once('error', () => finish(new Error('unreachable')));
   });
 }
 
 /**
- * One device's connection to the host's LAN helper. Keeps a server clock
- * offset (for the shared countdown) and reconnects with its seat token if the
- * connection drops, for up to the helper's grace period.
+ * One player's link to the match. The host's client runs the match authority
+ * (lanHost.js) in this page and accepts the guest over WebRTC; the guest's
+ * client connects to it. Both keep a server clock offset for the shared
+ * countdown, and the guest reconnects with its seat token if the link drops.
  */
 export class LanClient {
   constructor({ onState, onWelcome, onError, onClosed, onStatus }) {
     this.handlers = { onState, onWelcome, onError, onClosed, onStatus };
-    this.socket = null; this.session = null; this.offset = 0; this.bestRtt = Infinity;
-    this.leaving = false; this.pingTimer = null; this.reconnectTimer = null;
+    this.peer = null; this.host = null; this.local = null; this.connection = null;
+    this.session = null; this.offset = 0; this.bestRtt = Infinity;
+    this.leaving = false; this.reconnecting = false; this.resuming = false;
+    this.heartbeat = null; this.reconnectTimer = null;
   }
 
-  /** Server time now, estimated from ping round trips. */
+  /** Match time now, on the host's clock. */
   serverNow() { return Date.now() + this.offset; }
 
   status(value) { this.handlers.onStatus?.(value); }
 
-  async connect(address, port, firstMessage) {
-    this.leaving = false;
-    const socket = await open(urlFor(address, port));
-    this.attach(socket, address, port);
-    socket.send(JSON.stringify(firstMessage));
-  }
+  // ---- Host ---------------------------------------------------------------
 
-  create(name) { return this.connect('localhost', LAN_WS_PORT, { type: 'create', name }).catch(() => { throw new Error('no_helper'); }); }
-
-  async join(code, name, manualAddress = '') {
-    const target = manualAddress.trim() ? { address: manualAddress.trim(), port: LAN_WS_PORT } : await findLobby(code);
-    try { await this.connect(target.address, target.port, { type: 'join', code, name }); }
-    catch { throw new Error('unreachable'); }
-  }
-
-  /** Rejoin a lobby saved in this tab (after a page reload). */
-  async resume() {
-    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
-    if (!saved) return false;
-    this.resuming = true;
-    try { await this.connect(saved.address, saved.port, { type: 'rejoin', code: saved.code, token: saved.token }); return true; }
-    catch { sessionStorage.removeItem(SESSION_KEY); return false; }
-  }
-
-  attach(socket, address, port) {
-    this.socket = socket;
+  async create(name) {
+    // Register an unused invite code as this device's peer id.
+    let peer = null, code = null;
+    for (let attempt = 0; attempt < 4 && !peer; attempt++) {
+      code = makeInviteCode();
+      try { peer = await openPeer(PEER_ID_PREFIX + code); }
+      catch (error) { if (error.message !== 'taken') throw error; }
+    }
+    if (!peer) throw new Error('signaling');
+    this.peer = peer; this.leaving = false;
+    this.host = createLanHost();
+    // Keep the code registered if the signaling connection blips; open data channels are unaffected.
+    peer.on('disconnected', () => { if (!peer.destroyed && !this.leaving) peer.reconnect(); });
+    peer.on('connection', connection => connection.once('open', () => this.acceptGuest(connection)));
+    const link = this.host.accept({ send: message => queueMicrotask(() => this.receive(message)), close() {} }, { local: true });
+    this.local = { send: message => link.receive(JSON.stringify(message)) };
+    this.unload = () => this.leave();
+    window.addEventListener('pagehide', this.unload);
     this.status('connected');
-    socket.addEventListener('message', event => this.receive(JSON.parse(event.data), address, port));
-    socket.addEventListener('close', () => this.dropped(socket));
-    // Several quick pings early, then occasional ones: keep the lowest-latency estimate.
-    let count = 0;
-    clearInterval(this.pingTimer);
-    const ping = () => { this.send({ type: 'ping', t: Date.now() }); if (++count === 5) { clearInterval(this.pingTimer); this.pingTimer = setInterval(ping, 10000); } };
-    ping();
-    this.pingTimer = setInterval(ping, 400);
+    this.send({ type: 'create', name, code });
   }
 
-  receive(message, address, port) {
-    switch (message.type) {
-      case 'pong': {
-        const rtt = Date.now() - message.t;
-        if (rtt <= this.bestRtt * 1.5) {
-          this.bestRtt = Math.min(this.bestRtt, rtt);
-          this.offset = message.serverNow - (message.t + rtt / 2);
-        }
-        return;
-      }
-      case 'welcome':
-        this.resuming = false;
-        this.session = { address, port, code: message.code, token: message.token, playerId: message.playerId, host: message.host };
-        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(this.session)); } catch { /* storage unavailable */ }
-        return this.handlers.onWelcome?.(this.session);
-      case 'state': return this.handlers.onState?.(message);
-      case 'error':
-        if (['expired', 'not_found'].includes(message.error) && this.resuming) return this.giveUp('lobby_gone');
-        if (['expired', 'not_found'].includes(message.error) && this.reconnecting) return this.giveUp('connection_lost');
-        return this.handlers.onError?.(message.error);
-      case 'closed': return this.giveUp(message.reason);
+  acceptGuest(connection) {
+    let lastHeard = Date.now(), gone = false;
+    const link = this.host.accept({
+      send: message => { if (connection.open) connection.send(JSON.stringify(message)); },
+      close: () => connection.close(),
+    });
+    connection.on('data', data => { lastHeard = Date.now(); if (typeof data === 'string') link.receive(data); });
+    // The guest pings every HEARTBEAT_MS; silence means the link is gone even if WebRTC has not noticed yet.
+    const watchdog = setInterval(() => { if (Date.now() - lastHeard > LINK_TIMEOUT_MS) connection.close(); }, HEARTBEAT_MS);
+    const done = () => { if (gone) return; gone = true; clearInterval(watchdog); link.closed(); };
+    connection.on('close', done);
+    connection.on('error', done);
+  }
+
+  // ---- Guest --------------------------------------------------------------
+
+  async join(code, name) {
+    this.leaving = false;
+    this.peer = await openPeer();
+    try { this.attachGuest(await connectTo(this.peer, code)); }
+    catch (error) { this.peer.destroy(); this.peer = null; throw error; }
+    this.send({ type: 'join', code, name });
+  }
+
+  /** Rejoin the lobby saved in this tab after a reload (guests only). */
+  async resume() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null'); } catch { /* storage unavailable */ }
+    if (!saved) return false;
+    this.resuming = true; this.leaving = false;
+    try {
+      this.peer = await openPeer();
+      this.session = saved;
+      this.attachGuest(await connectTo(this.peer, saved.code));
+      this.send({ type: 'rejoin', code: saved.code, token: saved.token });
+      return true;
+    } catch {
+      this.resuming = false;
+      this.peer?.destroy(); this.peer = null;
+      try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
+      return false;
     }
   }
 
-  send(message) {
-    if (this.socket?.readyState === WebSocket.OPEN) { this.socket.send(JSON.stringify(message)); return true; }
-    return false;
+  attachGuest(connection) {
+    this.connection = connection;
+    this.status('connected');
+    let lastHeard = Date.now();
+    connection.on('data', data => {
+      lastHeard = Date.now();
+      try { this.receive(JSON.parse(data)); } catch { /* ignore malformed data */ }
+    });
+    connection.on('close', () => this.dropped(connection));
+    clearInterval(this.heartbeat);
+    // Heartbeat pings double as clock-sync samples.
+    const beat = () => {
+      if (Date.now() - lastHeard > LINK_TIMEOUT_MS) { connection.close(); return; }
+      this.send({ type: 'ping', t: Date.now() });
+    };
+    beat();
+    this.heartbeat = setInterval(beat, HEARTBEAT_MS);
   }
 
-  dropped(socket) {
-    if (socket !== this.socket) return;
-    clearInterval(this.pingTimer);
+  dropped(connection) {
+    if (connection !== this.connection) return;
+    clearInterval(this.heartbeat);
     if (this.leaving || !this.session) { this.status('closed'); return; }
     // "Connection lost. Attempting to reconnect..."
     this.reconnecting = true;
@@ -129,27 +147,78 @@ export class LanClient {
       if (this.leaving) return;
       if (Date.now() > deadline) return this.giveUp('connection_lost');
       try {
-        await this.connect(this.session.address, this.session.port, { type: 'rejoin', code: this.session.code, token: this.session.token });
-        this.reconnecting = false;
-      } catch { this.reconnectTimer = setTimeout(retry, 1000); }
+        if (!this.peer || this.peer.destroyed) this.peer = await openPeer();
+        this.attachGuest(await connectTo(this.peer, this.session.code));
+        this.send({ type: 'rejoin', code: this.session.code, token: this.session.token });
+      } catch (error) {
+        // The host's code is gone from the signaling server: the host closed the page.
+        if (error.message === 'not_found') return this.giveUp('host_left');
+        this.reconnectTimer = setTimeout(retry, 1000);
+      }
     };
-    this.reconnectTimer = setTimeout(retry, 500);
+    this.reconnectTimer = setTimeout(retry, 300);
+  }
+
+  // ---- Both ---------------------------------------------------------------
+
+  receive(message) {
+    switch (message?.type) {
+      case 'pong': {
+        const rtt = Date.now() - message.t;
+        if (rtt <= this.bestRtt * 1.5) {
+          this.bestRtt = Math.min(this.bestRtt, rtt);
+          this.offset = message.serverNow - (message.t + rtt / 2);
+        }
+        return;
+      }
+      case 'welcome':
+        this.resuming = false; this.reconnecting = false;
+        this.session = { code: message.code, token: message.token, playerId: message.playerId, host: message.host };
+        // Only a guest can come back after a reload; the host's page holds the match.
+        try { if (!message.host) sessionStorage.setItem(SESSION_KEY, JSON.stringify(this.session)); } catch { /* storage unavailable */ }
+        this.status('connected');
+        return this.handlers.onWelcome?.(this.session);
+      case 'state': return this.handlers.onState?.(message);
+      case 'error':
+        if (['expired', 'not_found'].includes(message.error) && this.resuming) return this.giveUp('lobby_gone');
+        if (['expired', 'not_found'].includes(message.error) && this.reconnecting) return this.giveUp('connection_lost');
+        return this.handlers.onError?.(message.error);
+      case 'closed':
+        if (this.leaving) return;
+        return this.giveUp(message.reason);
+    }
+  }
+
+  send(message) {
+    if (this.local) { this.local.send(message); return true; }
+    if (this.connection?.open) { this.connection.send(JSON.stringify(message)); return true; }
+    return false;
+  }
+
+  shutdown() {
+    clearTimeout(this.reconnectTimer); clearInterval(this.heartbeat);
+    if (this.unload) window.removeEventListener('pagehide', this.unload);
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
+    const peer = this.peer;
+    this.connection?.close();
+    // Give the final "closed" message a moment to reach the other device.
+    setTimeout(() => peer?.destroy(), 300);
   }
 
   giveUp(reason) {
+    if (this.leaving) return;
     this.leaving = true; this.reconnecting = false;
-    clearTimeout(this.reconnectTimer); clearInterval(this.pingTimer);
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
-    this.socket?.close();
+    this.host?.close();
+    this.shutdown();
     this.status('closed');
     this.handlers.onClosed?.(reason);
   }
 
   leave() {
+    if (this.leaving) return;
     this.send({ type: 'leave' });
     this.leaving = true;
-    clearTimeout(this.reconnectTimer); clearInterval(this.pingTimer);
-    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* storage unavailable */ }
-    this.socket?.close();
+    this.host?.close();
+    this.shutdown();
   }
 }

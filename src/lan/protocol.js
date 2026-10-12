@@ -1,10 +1,15 @@
-// LAN multiplayer protocol, shared by the browser client and the Node LAN
-// helper (server/lanRelay.js). Messages are small JSON objects with a `type`.
+// LAN multiplayer protocol, shared by the host's match authority (lanHost.js)
+// and each player's client (lanClient.js). Messages are small JSON objects
+// with a `type`, sent over a WebRTC data channel between the two devices.
 import { COMPETITION_POOLS, RACE_DURATIONS, SUPPORTED_SIGNS } from '../recognition/config.js';
 
-export const LAN_WS_PORT = 5180;
-export const LAN_DISCOVERY_PORT = 5181;
-export const LAN_DISCOVERY_MS = 2500;
+// The host registers this id plus the invite code with the PeerJS signaling
+// server; the guest connects to the same id. Only that handshake uses the server.
+export const PEER_ID_PREFIX = 'sign-duo-lan-v1-';
+export const CONNECT_TIMEOUT_MS = 10000;
+// Each side pings every HEARTBEAT_MS and treats LINK_TIMEOUT_MS of silence as a drop.
+export const HEARTBEAT_MS = 2000;
+export const LINK_TIMEOUT_MS = 7000;
 // How long a disconnected player's place (and a paused match) is held.
 export const RECONNECT_GRACE_MS = 30000;
 // Countdown after both cameras are ready, so both devices start together.
@@ -36,8 +41,7 @@ const isText = (value, max) => typeof value === 'string' && value.length > 0 && 
 // Allowed client messages and the checks for their fields.
 const CLIENT_MESSAGES = {
   ping: m => Number.isFinite(m.t),
-  find: m => CODE_PATTERN.test(m.code ?? ''),
-  create: m => m.name === undefined || typeof m.name === 'string',
+  create: m => (m.name === undefined || typeof m.name === 'string') && (m.code === undefined || CODE_PATTERN.test(m.code)),
   join: m => CODE_PATTERN.test(m.code ?? '') && (m.name === undefined || typeof m.name === 'string'),
   rejoin: m => CODE_PATTERN.test(m.code ?? '') && isText(m.token, 64),
   name: m => typeof m.name === 'string',
@@ -72,16 +76,7 @@ export const LAN_ERRORS = Object.freeze({
   not_host: 'Only the host can do that.',
   not_ready: 'Both players must be connected and ready.',
   expired: 'Your place in the lobby has expired. Join again with the invite code.',
-  no_helper: 'The LAN helper is not running on this device. Start it with "npm run lan", then try again.',
-  unreachable: 'Could not reach the host. Check that both devices are on the same network.',
+  signaling: 'Could not reach the matchmaking service. Check your internet connection and try again.',
+  unreachable: 'Found the lobby but could not connect to the host. Check that both devices are on the same Wi-Fi, then try again.',
   camera: 'A camera did not start in time. Check camera access and try again.',
 });
-
-/** True for loopback and private-network page origins (the only pages allowed to connect). */
-export function isLocalOrigin(origin) {
-  if (!origin) return true;
-  let host;
-  try { host = new URL(origin).hostname; } catch { return false; }
-  return host === 'localhost' || host === '[::1]' || host === '::1' || /^127\./.test(host) ||
-    /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host.endsWith('.local');
-}

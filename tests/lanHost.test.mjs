@@ -1,30 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLanRelay } from '../server/lanRelay.js';
-import { parseClientMessage, normalizeInviteCode, makeInviteCode, CODE_PATTERN, isLocalOrigin } from '../src/lan/protocol.js';
+import { createLanHost } from '../src/lan/lanHost.js';
+import { parseClientMessage, normalizeInviteCode, makeInviteCode, CODE_PATTERN } from '../src/lan/protocol.js';
 
-let nextPort = 46000 + Math.floor(Math.random() * 1000) * 4;
-async function startRelay(options = {}) {
-  const ports = { port: nextPort++, discoveryPort: nextPort++ };
-  const relay = createLanRelay({ ...ports, host: '127.0.0.1', countdownMs: 50, graceMs: 300, tickMs: 20, cameraTimeoutMs: 1000, discoveryMs: 600, ...options });
-  await relay.ready;
-  return relay;
+// The match authority runs in the host's browser; here its "network" is in memory.
+function startHost(options = {}) {
+  return createLanHost({ countdownMs: 50, graceMs: 300, tickMs: 20, cameraTimeoutMs: 1000, ...options });
 }
 
-// A test client that records every message and can wait for one.
-async function connect(relay) {
-  const socket = new WebSocket(`ws://127.0.0.1:${relay.port}`);
+// A test player connection that records every message and can wait for one.
+async function connect(host, { local = false } = {}) {
   const messages = [];
   const waiters = [];
-  socket.addEventListener('message', event => {
-    const message = JSON.parse(event.data);
-    messages.push(message);
-    for (const w of [...waiters]) if (w.match(message)) { waiters.splice(waiters.indexOf(w), 1); w.resolve(message); }
-  });
-  await new Promise((resolve, reject) => { socket.addEventListener('open', resolve); socket.addEventListener('error', reject); });
+  let open = true;
+  const link = host.accept({
+    send: message => {
+      if (!open) return;
+      const copy = JSON.parse(JSON.stringify(message));
+      messages.push(copy);
+      for (const w of [...waiters]) if (w.match(copy)) { waiters.splice(waiters.indexOf(w), 1); w.resolve(copy); }
+    },
+    close: () => { if (open) { open = false; link.closed(); } },
+  }, { local });
   const client = {
-    socket, messages,
-    send: message => socket.send(JSON.stringify(message)),
+    messages,
+    send: message => { if (open) link.receive(typeof message === 'string' ? message : JSON.stringify(message)); },
     waitFor(match, ms = 2000) {
       const found = messages.find(match);
       if (found) { messages.splice(messages.indexOf(found), 1); return Promise.resolve(found); }
@@ -35,16 +35,17 @@ async function connect(relay) {
       });
     },
     state: (phase, extra = () => true) => client.waitFor(m => m.type === 'state' && (!phase || m.phase === phase) && extra(m)),
-    close: () => socket.close(),
+    // A dropped network link.
+    close: () => { if (open) { open = false; link.closed(); } },
   };
   return client;
 }
 
-async function lobbyWithTwo(relay) {
-  const host = await connect(relay);
+async function lobbyWithTwo(authority) {
+  const host = await connect(authority, { local: true });
   host.send({ type: 'create', name: 'Ana' });
   const welcome = await host.waitFor(m => m.type === 'welcome');
-  const guest = await connect(relay);
+  const guest = await connect(authority);
   guest.send({ type: 'join', code: welcome.code, name: 'Ben' });
   const guestWelcome = await guest.waitFor(m => m.type === 'welcome');
   return { host, guest, code: welcome.code, hostToken: welcome.token, guestToken: guestWelcome.token };
@@ -63,7 +64,7 @@ async function startMatch(host, guest) {
 
 const me = (state, id) => state.match.snapshot.players.find(p => p.id === id);
 
-test('protocol: invite codes, message validation and allowed page origins', () => {
+test('protocol: invite codes and message validation', () => {
   for (let i = 0; i < 200; i++) assert.match(makeInviteCode(), CODE_PATTERN);
   assert.equal(normalizeInviteCode(' x7k-9p2 '), 'X7K9P2');
   assert.equal(normalizeInviteCode('X7K9P'), null, 'too short');
@@ -73,38 +74,39 @@ test('protocol: invite codes, message validation and allowed page origins', () =
     '{"type":"settings","durationSeconds":7,"vocabulary":"alphabet"}', 'x'.repeat(5000)]) {
     assert.equal(parseClientMessage(bad).ok, false, bad.slice(0, 40));
   }
-  assert.ok(isLocalOrigin('http://localhost:5173') && isLocalOrigin('http://192.168.1.5:5173') && isLocalOrigin(undefined));
-  assert.ok(!isLocalOrigin('https://example.com'));
+  assert.equal(parseClientMessage('{"type":"create","code":"bad"}').ok, false);
 });
 
 test('host creates a lobby; guest joins with the code; both see both players', async () => {
-  const relay = await startRelay();
+  const authority = startHost();
   try {
-    const host = await connect(relay);
-    host.send({ type: 'create', name: 'Ana' });
+    const host = await connect(authority, { local: true });
+    host.send({ type: 'create', name: 'Ana', code: 'X7K9P2' });
     const welcome = await host.waitFor(m => m.type === 'welcome');
-    assert.match(welcome.code, CODE_PATTERN);
+    assert.equal(welcome.code, 'X7K9P2', 'the code the host registered for its peer id');
     assert.equal(welcome.host, true);
     const waiting = await host.state('lobby');
     assert.deepEqual(waiting.players.map(p => [p.name, p.connected]), [['Ana', true]]);
 
-    const guest = await connect(relay);
+    const guest = await connect(authority);
     guest.send({ type: 'join', code: welcome.code, name: 'Ben' });
     assert.equal((await guest.waitFor(m => m.type === 'welcome')).playerId, 'p2');
     const both = await host.state('lobby', m => m.players.length === 2);
     assert.deepEqual(both.players.map(p => [p.id, p.name, p.host, p.connected, p.ready]), [['p1', 'Ana', true, true, false], ['p2', 'Ben', false, true, false]]);
     assert.equal((await guest.state('lobby', m => m.players.length === 2)).code, welcome.code);
-  } finally { await relay.close(); }
+  } finally { authority.close(); }
 });
 
 test('wrong code, full lobby, non-host start and start before ready are refused', async () => {
-  const relay = await startRelay();
+  const authority = startHost();
   try {
-    const stranger = await connect(relay);
+    const stranger = await connect(authority);
+    stranger.send({ type: 'create', name: 'Mallory' });
+    assert.equal((await stranger.waitFor(m => m.type === 'error')).error, 'bad_message', 'only the host page creates lobbies');
     stranger.send({ type: 'join', code: 'ABCDEF' });
     assert.equal((await stranger.waitFor(m => m.type === 'error')).error, 'not_found');
-    const { host, guest, code } = await lobbyWithTwo(relay);
-    const third = await connect(relay);
+    const { host, guest, code } = await lobbyWithTwo(authority);
+    const third = await connect(authority);
     third.send({ type: 'join', code });
     assert.equal((await third.waitFor(m => m.type === 'error')).error, 'full');
     guest.send({ type: 'start' });
@@ -115,13 +117,13 @@ test('wrong code, full lobby, non-host start and start before ready are refused'
     assert.equal((await guest.waitFor(m => m.type === 'error')).error, 'not_host');
     host.send('not json at all');
     assert.equal((await host.waitFor(m => m.type === 'error')).error, 'bad_message');
-  } finally { await relay.close(); }
+  } finally { authority.close(); }
 });
 
 test('a full match: same sequence, synced start, authoritative scores, duplicates rejected, results on both', async () => {
-  const relay = await startRelay();
+  const authority = startHost();
   try {
-    const { host, guest } = await lobbyWithTwo(relay);
+    const { host, guest } = await lobbyWithTwo(authority);
     host.send({ type: 'settings', durationSeconds: 30, vocabulary: 'alphabet' });
     await guest.state('lobby', m => m.settings.durationSeconds === 30);
     const { countdown, playing } = await startMatch(host, guest);
@@ -161,8 +163,8 @@ test('a full match: same sequence, synced start, authoritative scores, duplicate
     state = await guest.state('playing', m => me(m, 'p1').skipped === 1);
     assert.equal(me(state, 'p1').progress, 3);
 
-    // End the match early by moving the relay clock: results reach both, with the same winner.
-    relay.lobbies.values().next().value.engine.startedAt -= 30000;
+    // End the match early by moving the authority clock: results reach both, with the same winner.
+    authority.lobbies.values().next().value.engine.startedAt -= 30000;
     const [hostResults, guestResults] = await Promise.all([host.state('results'), guest.state('results')]);
     assert.deepEqual(hostResults.match.results.ranking.map(p => [p.id, p.correct]), guestResults.match.results.ranking.map(p => [p.id, p.correct]));
     // Two correct each; the guest's wrong sign decides it.
@@ -170,14 +172,14 @@ test('a full match: same sequence, synced start, authoritative scores, duplicate
     assert.equal(hostResults.match.results.winnerId, 'p1');
     assert.equal(guestResults.match.results.winnerId, 'p1');
     assert.equal(hostResults.match.results.winReason, 'fewer_mistakes');
-  } finally { await relay.close(); }
+  } finally { authority.close(); }
 });
 
 test('a player disconnect pauses the match; rejoining resumes it with the paused time not counted', async () => {
   let clock = 1_000_000;
-  const relay = await startRelay({ now: () => clock, graceMs: 2000 });
+  const authority = startHost({ now: () => clock, graceMs: 2000 });
   try {
-    const { host, guest, code, guestToken } = await lobbyWithTwo(relay);
+    const { host, guest, code, guestToken } = await lobbyWithTwo(authority);
     const timer = setInterval(() => { clock += 20; }, 20);
     try {
       const { playing } = await startMatch(host, guest);
@@ -186,50 +188,50 @@ test('a player disconnect pauses the match; rejoining resumes it with the paused
       const paused = await host.state('paused');
       assert.deepEqual(paused.pause.waitingFor, ['p2']);
       clock += 5000; // five seconds away
-      const back = await connect(relay);
+      const back = await connect(authority);
       back.send({ type: 'rejoin', code, token: guestToken });
       assert.equal((await back.waitFor(m => m.type === 'welcome')).playerId, 'p2');
       // Skip updates queued before the pause; take the first one after the rejoin.
       const resumed = await host.state('playing', m => m.match.endsAt > endsAt);
       assert.ok(resumed.match.endsAt >= endsAt + 5000, 'the end time moved by the pause');
       // A stolen or wrong token cannot take the place.
-      const imposter = await connect(relay);
+      const imposter = await connect(authority);
       imposter.send({ type: 'rejoin', code, token: 'x'.repeat(32) });
       assert.equal((await imposter.waitFor(m => m.type === 'error')).error, 'expired');
     } finally { clearInterval(timer); }
-  } finally { await relay.close(); }
+  } finally { authority.close(); }
 });
 
 test('if the opponent does not come back in time, the remaining player wins by forfeit', async () => {
-  const relay = await startRelay({ graceMs: 200 });
+  const authority = startHost({ graceMs: 200 });
   try {
-    const { host, guest } = await lobbyWithTwo(relay);
+    const { host, guest } = await lobbyWithTwo(authority);
     await startMatch(host, guest);
     guest.close();
     await host.state('paused');
     const results = await host.state('results');
     assert.equal(results.match.results.winnerId, 'p1');
     assert.equal(results.match.results.winReason, 'opponent_left');
-  } finally { await relay.close(); }
+  } finally { authority.close(); }
 });
 
 test('the host leaving closes the match safely for the guest', async () => {
-  const relay = await startRelay();
+  const authority = startHost();
   try {
-    const { host, guest } = await lobbyWithTwo(relay);
+    const { host, guest } = await lobbyWithTwo(authority);
     await startMatch(host, guest);
     host.send({ type: 'leave' });
     assert.equal((await guest.waitFor(m => m.type === 'closed')).reason, 'host_left');
-    assert.equal(relay.lobbies.size, 0);
-  } finally { await relay.close(); }
+    assert.equal(authority.lobbies.size, 0);
+  } finally { authority.close(); }
 });
 
 test('play again starts a fresh synchronized match only when both agree; return to lobby resets ready', async () => {
-  const relay = await startRelay();
+  const authority = startHost();
   try {
-    const { host, guest } = await lobbyWithTwo(relay);
+    const { host, guest } = await lobbyWithTwo(authority);
     const first = (await startMatch(host, guest)).playing.match.raceId;
-    relay.lobbies.values().next().value.engine.startedAt -= 60000;
+    authority.lobbies.values().next().value.engine.startedAt -= 60000;
     await host.state('results'); await guest.state('results');
     host.send({ type: 'rematch' });
     const waiting = await guest.state('results', m => m.players.find(p => p.id === 'p1').rematch);
@@ -240,30 +242,10 @@ test('play again starts a fresh synchronized match only when both agree; return 
     const second = await guest.state('playing');
     assert.notEqual(second.match.raceId, first);
     assert.ok(me(second, 'p1').correct === 0 && me(second, 'p2').correct === 0);
-    relay.lobbies.values().next().value.engine.startedAt -= 60000;
+    authority.lobbies.values().next().value.engine.startedAt -= 60000;
     await host.state('results');
     guest.send({ type: 'toLobby' });
     const lobby = await host.state('lobby');
     assert.ok(lobby.players.every(p => !p.ready) && lobby.match === null);
-  } finally { await relay.close(); }
-});
-
-test('UDP discovery: another helper finds the host by invite code; unknown codes are not found', async () => {
-  const hostRelay = await startRelay();
-  const joinRelay = await startRelay({ discoveryTargetPort: hostRelay.discoveryPort });
-  try {
-    const host = await connect(hostRelay);
-    host.send({ type: 'create', name: 'Ana' });
-    const { code } = await host.waitFor(m => m.type === 'welcome');
-    const browser = await connect(joinRelay);
-    browser.send({ type: 'find', code });
-    const found = await browser.waitFor(m => m.type === 'found', 3000);
-    assert.equal(found.port, hostRelay.port);
-    // The address it found really reaches the host's lobby.
-    const guest = new WebSocket(`ws://${found.address}:${found.port}`);
-    await new Promise((resolve, reject) => { guest.addEventListener('open', resolve); guest.addEventListener('error', reject); });
-    guest.close();
-    browser.send({ type: 'find', code: 'ZZZZZZ' });
-    assert.equal((await browser.waitFor(m => m.type === 'error', 3000)).error, 'not_found');
-  } finally { await hostRelay.close(); await joinRelay.close(); }
+  } finally { authority.close(); }
 });
